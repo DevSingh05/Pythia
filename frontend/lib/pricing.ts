@@ -211,6 +211,47 @@ export function buildOptionsChain(
 export const EXPIRY_OPTIONS = EXPIRIES
 
 /**
+ * Compute annualised logit-space volatility from a price history series.
+ * Returns NaN if there aren't enough data points.
+ *
+ * Method: treat logit(p) as the log-price equivalent in Black-Scholes.
+ *   σ_annual = std(ΔL) × √(trading_days_per_year)
+ * where ΔL_i = logit(p_{i+1}) - logit(p_i) per day.
+ *
+ * @param history  Array of {t: unix-ms, p: 0-1} from Polymarket price history
+ */
+export function computeHistoricalVol(history: { t: number; p: number }[]): number {
+  if (history.length < 5) return NaN
+
+  // Compute logit-space daily returns, winsorise at 1st/99th percentile
+  const logitPrices = history.map(pt => logit(pt.p))
+  const diffs: number[] = []
+  for (let i = 1; i < logitPrices.length; i++) {
+    diffs.push(logitPrices[i] - logitPrices[i - 1])
+  }
+
+  // Winsorise to remove outliers
+  const sorted = [...diffs].sort((a, b) => a - b)
+  const lo = sorted[Math.floor(sorted.length * 0.01)]
+  const hi = sorted[Math.floor(sorted.length * 0.99)]
+  const clean = diffs.filter(d => d >= lo && d <= hi)
+  if (clean.length < 3) return NaN
+
+  // Population std dev of clean returns
+  const mean = clean.reduce((s, d) => s + d, 0) / clean.length
+  const variance = clean.reduce((s, d) => s + (d - mean) ** 2, 0) / (clean.length - 1)
+  const stdDaily = Math.sqrt(variance)
+
+  // Annualise: estimate avg time between ticks in days, scale to annual
+  const avgTickDays = (history[history.length - 1].t - history[0].t) / (history.length - 1) / 86_400_000
+  const ticksPerYear = avgTickDays > 0 ? 365 / avgTickDays : 252
+  const annual = stdDaily * Math.sqrt(ticksPerYear)
+
+  // Clamp to sane range: 0.05 – 5.0
+  return Math.min(5.0, Math.max(0.05, annual))
+}
+
+/**
  * Generate payoff data for the P&L chart
  * Returns array of {prob, pnl} points for the hockey-stick diagram
  */

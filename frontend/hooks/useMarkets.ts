@@ -62,8 +62,9 @@ interface UsePriceHistoryState {
 }
 
 export function usePriceHistory(
-  marketId: string,
-  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d'
+  tokenId: string,          // YES CLOB token_id (market.clobTokenId)
+  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d',
+  marketId?: string,        // integer market ID — only needed for custom backend
 ) {
   const [state, setState] = useState<UsePriceHistoryState>({
     history: [],
@@ -72,12 +73,12 @@ export function usePriceHistory(
   })
 
   useEffect(() => {
-    if (!marketId) return
+    if (!tokenId) return
     setState(s => ({ ...s, loading: true, error: null }))
-    fetchPriceHistory(marketId, interval)
+    fetchPriceHistory(tokenId, interval, marketId)
       .then(history => setState({ history, loading: false, error: null }))
       .catch(e => setState({ history: [], loading: false, error: e.message }))
-  }, [marketId, interval])
+  }, [tokenId, interval, marketId])
 
   return state
 }

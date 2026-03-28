@@ -30,23 +30,30 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 
 export interface PolymarketMarket {
   id: string
-  condition_id: string
+  conditionId: string
+  slug?: string
   question: string
   description: string
-  end_date_iso: string
+  endDateIso: string          // "2026-03-31" — camelCase from Gamma API
+  endDate?: string            // full ISO fallback
   volume: number
   volume24hr: number
   liquidity: number
   outcomes: string[]
-  outcomePrices: string | string[]  // JSON-encoded array like '["0.42","0.58"]' or already parsed
+  outcomePrices: string | string[]
+  clobTokenIds?: string[]     // [yesTokenId, noTokenId]
   tags: { id: string; label: string }[]
   active: boolean
   closed: boolean
+  oneDayPriceChange?: number  // 24h probability change (-1 to 1)
+  events?: { id: string; slug: string; title?: string }[]
 }
 
 export interface AppMarket {
   id: string
   conditionId: string
+  slug: string
+  clobTokenId: string    // YES token ID for /prices-history
   title: string
   description: string
   resolutionDate: string
@@ -70,18 +77,32 @@ function toAppMarket(m: PolymarketMarket): AppMarket {
     ? JSON.parse(m.outcomePrices)
     : m.outcomePrices) as string[]
   const yesProb = parseFloat(prices[0]) || 0
-  const resolution = new Date(m.end_date_iso)
-  const daysLeft = Math.max(0, Math.ceil((resolution.getTime() - Date.now()) / 86_400_000))
+
+  // endDateIso is "YYYY-MM-DD"; fall back to endDate (full ISO)
+  const resolutionStr = m.endDateIso ?? m.endDate ?? ''
+  const resolution = new Date(resolutionStr)
+  const daysLeft = resolutionStr
+    ? Math.max(0, Math.ceil((resolution.getTime() - Date.now()) / 86_400_000))
+    : 0
+
+  // clobTokenIds[0] = YES token, required by Gamma /prices-history
+  const clobTokenId = m.clobTokenIds?.[0] ?? ''
+
+  // Use the parent event slug for the Polymarket URL — it matches polymarket.com/event/{slug}.
+  // Market-level slugs sometimes include a numeric suffix that doesn't map to a real page.
+  const eventSlug = m.events?.[0]?.slug ?? m.slug ?? m.conditionId
 
   return {
     id: m.id,
-    conditionId: m.condition_id,
+    conditionId: m.conditionId,
+    slug: eventSlug,
+    clobTokenId,
     title: m.question,
     description: m.description,
-    resolutionDate: m.end_date_iso,
+    resolutionDate: resolutionStr,
     daysToResolution: daysLeft,
     currentProb: yesProb,
-    change24h: 0,       // enriched by backend or separate endpoint
+    change24h: m.oneDayPriceChange ?? 0,
     volume24h: m.volume24hr ?? 0,
     liquidity: m.liquidity ?? 0,
     tags: m.tags?.map(t => t.label) ?? [],
@@ -104,7 +125,24 @@ export async function fetchMarkets(params?: {
     if (params?.offset) qs.set('offset', String(params.offset))
     if (params?.tag) qs.set('tag', params.tag)
     if (params?.q) qs.set('q', params.q)
-    return apiFetch<AppMarket[]>(`${API_BASE}/markets?${qs}`)
+    const res = await apiFetch<{ markets: any[] }>(`${API_BASE}/markets?${qs}`)
+    return res.markets.map(m => ({
+      id: m.condition_id,
+      conditionId: m.condition_id,
+      slug: m.slug ?? m.condition_id,
+      clobTokenId: m.clob_token_id ?? '',
+      title: m.question,
+      description: m.description ?? '',
+      resolutionDate: m.resolution_ts ?? '',
+      daysToResolution: m.resolution_ts ? Math.max(0, Math.ceil((new Date(m.resolution_ts).getTime() - Date.now()) / 86_400_000)) : 0,
+      currentProb: m.current_prob ?? 0.5,
+      change24h: 0,
+      volume24h: m.volume24h ?? 0,
+      liquidity: m.liquidity ?? 0,
+      tags: m.tags ? (typeof m.tags === 'string' ? JSON.parse(m.tags) : m.tags).map((t: any) => t.label ?? t) : [],
+      active: m.active ?? true,
+      closed: m.closed ?? false,
+    }))
   }
 
   // Proxy fallback — browser can't hit Gamma directly (CORS)
@@ -123,22 +161,57 @@ export async function fetchMarkets(params?: {
 /** Fetch single market. */
 export async function fetchMarket(id: string): Promise<AppMarket> {
   if (API_BASE) {
-    return apiFetch<AppMarket>(`${API_BASE}/markets/${id}`)
+    const m = await apiFetch<any>(`${API_BASE}/markets/${id}`)
+    return {
+      id: m.condition_id,
+      conditionId: m.condition_id,
+      slug: m.slug ?? m.condition_id,
+      clobTokenId: m.clob_token_id ?? '',
+      title: m.question,
+      description: m.description ?? '',
+      resolutionDate: m.resolution_ts ?? '',
+      daysToResolution: m.resolution_ts ? Math.max(0, Math.ceil((new Date(m.resolution_ts).getTime() - Date.now()) / 86_400_000)) : 0,
+      currentProb: m.current_prob ?? 0.5,
+      change24h: 0,
+      volume24h: m.volume24h ?? 0,
+      liquidity: m.liquidity ?? 0,
+      tags: m.tags ? (typeof m.tags === 'string' ? JSON.parse(m.tags) : m.tags).map((t: any) => t.label ?? t) : [],
+      active: m.active ?? true,
+      closed: m.closed ?? false,
+    }
   }
   const raw = await apiFetch<PolymarketMarket>(`${MARKETS_BASE}/markets/${id}`)
   return toAppMarket(raw)
 }
 
-/** Fetch probability history for a market (CLOB time-series). */
+// Official Gamma API interval enum: 1h | 6h | 1d | 1w | 1m | all
+// Map our internal labels to what the API actually accepts
+const INTERVAL_MAP: Record<string, string> = {
+  '1h':  '1h',
+  '6h':  '6h',
+  '1d':  '1d',
+  '7d':  '1w',   // "7d" is not valid — official value is "1w"
+  '30d': '1m',   // "30d" is not valid — official value is "1m"
+}
+
+/** Fetch probability history for a market (CLOB time-series).
+ *  @param tokenId  The YES CLOB token_id (market.clobTokenId) required by Gamma /prices-history.
+ *                  Passing condition_id silently returns empty history.
+ *  @param marketId The integer market ID, only used when routing through a custom backend.
+ */
 export async function fetchPriceHistory(
-  marketId: string,
-  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d'
+  tokenId: string,
+  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d',
+  marketId?: string,
 ): Promise<PricePoint[]> {
-  if (API_BASE) {
-    return apiFetch<PricePoint[]>(`${API_BASE}/markets/${marketId}/history?interval=${interval}`)
+  if (API_BASE && marketId) {
+    const res = await apiFetch<{ history: PricePoint[] }>(`${API_BASE}/markets/${marketId}/history?interval=${interval}`)
+    return res.history ?? []
   }
+  if (!tokenId) return []
+  const gammaInterval = INTERVAL_MAP[interval] ?? '1w'
   const res = await apiFetch<{ history: { t: number; p: number }[] }>(
-    `${MARKETS_BASE}/prices-history?market=${marketId}&interval=${interval}&fidelity=60`
+    `${MARKETS_BASE}/prices-history?market=${tokenId}&interval=${gammaInterval}&fidelity=60`
   )
   return res.history ?? []
 }
@@ -181,12 +254,15 @@ export async function fetchOptionsChain(
   expiry?: string
 ): Promise<OptionsChainResponse> {
   const qs = expiry ? `?expiry=${expiry}` : ''
-  return apiFetch<OptionsChainResponse>(`${API_BASE}/options/${marketId}/chain${qs}`)
+  return apiFetch<OptionsChainResponse>(`${MARKETS_BASE}/markets/${marketId}/chain${qs}`)
 }
 
 /** Fetch current vol estimate for a market. */
 export async function fetchVolatility(marketId: string): Promise<{ sigma: number; daysEstimated: number }> {
-  return apiFetch(`${API_BASE}/options/${marketId}/vol`)
+  if (API_BASE) {
+    return apiFetch(`${API_BASE}/markets/${marketId}/vol`)
+  }
+  return apiFetch(`${MARKETS_BASE}/markets/${marketId}/vol`)
 }
 
 // ─── Order placement (Pythia backend) ─────────────────────────────────────────

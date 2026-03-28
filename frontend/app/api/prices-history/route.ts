@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const GAMMA = 'https://gamma-api.polymarket.com'
+const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polymarket.com'
 
 export async function GET(req: NextRequest) {
   const qs = req.nextUrl.searchParams.toString()

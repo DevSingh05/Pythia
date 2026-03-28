@@ -1,22 +1,25 @@
 /**
  * Server-side proxy for a single Polymarket Gamma API market.
+ * Also fetches the parent event so we have the correct event slug for the Polymarket URL.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const GAMMA = 'https://gamma-api.polymarket.com'
+const BACKEND = process.env.MARKET_DATA_SERVICE_URL ?? 'http://localhost:3001'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  let upstream: Response
+  const { id } = await params
+
+  let mktRes: Response
   try {
-    upstream = await fetch(`${GAMMA}/markets/${params.id}`, { next: { revalidate: 30 } })
+    mktRes = await fetch(`${BACKEND}/markets/${id}`, { cache: 'no-store' })
   } catch {
-    return NextResponse.json({ error: 'Failed to reach Polymarket' }, { status: 502 })
+    return NextResponse.json({ error: 'Failed to reach backend' }, { status: 502 })
   }
 
-  const data = await upstream.json().catch(() => null)
-  return NextResponse.json(data, { status: upstream.status })
+  const data = await mktRes.json().catch(() => null)
+  return NextResponse.json(data, { status: mktRes.status })
 }

@@ -36,9 +36,17 @@ interface CLOBOrderBook {
 export interface GammaMarket {
   conditionId: string;
   question:    string;
+  description: string;
   category:    string;
   endDate:     string | null;
   active:      boolean;
+  closed:      boolean;
+  volume24hr:  number;
+  liquidity:   number;
+  slug?:       string;
+  events?:     Array<{ id: string; slug: string; title?: string }>;
+  clobTokenIds?: string[]; // [yesTokenId, noTokenId]
+  tags?:       Array<{ id: string; label: string }>;
   tokens: Array<{
     token_id: string;
     outcome:  string;
@@ -183,11 +191,19 @@ export async function fetchMarkets(
   query: string,
   limit = 20
 ): Promise<GammaMarket[]> {
+  // Use the official end_date_min filter to exclude already-resolved markets.
+  // This is the correct API-level filter — no client-side date hacking needed.
+  const todayIso = new Date().toISOString();
   const params = new URLSearchParams({
-    q:      query,
-    limit:  String(limit),
-    active: "true",
+    active:        "true",
+    closed:        "false",
+    end_date_min:  todayIso,   // only markets whose resolution date is in the future
+    limit:         String(limit),
+    order:         "volume24hr",
+    ascending:     "false",
   });
+  if (query) params.set("q", query);
+
   try {
     const res = await fetch(`${GAMMA_BASE}/markets?${params}`, {
       signal: timeout(TIMEOUT_MS),
@@ -209,7 +225,21 @@ export async function fetchMarket(
       { signal: timeout(TIMEOUT_MS) }
     );
     if (!res.ok) return null;
-    return (await res.json()) as GammaMarket;
+    const market = (await res.json()) as GammaMarket;
+
+    try {
+      const evRes = await fetch(`${GAMMA_BASE}/events?market=${encodeURIComponent(condition_id)}`, { signal: timeout(TIMEOUT_MS) });
+      if (evRes.ok) {
+        const events = await evRes.json();
+        if (Array.isArray(events) && events.length > 0) {
+          market.events = events;
+        }
+      }
+    } catch (e) {
+      // Ignore event fetch failure
+    }
+
+    return market;
   } catch {
     return null;
   }
@@ -217,14 +247,36 @@ export async function fetchMarket(
 
 // ── Gamma — historical prices (public) ────────────────────────────────────────
 
+/**
+ * Fetch YES-price history from Gamma.
+ *
+ * IMPORTANT: the `market` param on /prices-history expects the CLOB token ID
+ * (called "asset id" in the official docs), NOT the condition_id.
+ * Passing condition_id silently returns empty history.
+ *
+ * Interval values per official API: max | all | 1m | 1w | 1d | 6h | 1h
+ *   "1d" = last 24 hours, "1w" = last 7 days, "1m" = last 30 days, "all" = all time.
+ *
+ * @param clob_token_id  YES token ID from market.clobTokenIds[0]
+ * @param days           Lookback window — determines which interval enum to use
+ */
 export async function fetchHistoricalPrices(
-  condition_id: string,
+  clob_token_id: string,
   days = 30
 ): Promise<GammaPricePoint[]> {
+  if (!clob_token_id) return [];
+
+  // Map requested days → correct interval enum
+  let interval: string;
+  if (days <= 1)       interval = "1d";
+  else if (days <= 7)  interval = "1w";
+  else if (days <= 30) interval = "1m";
+  else                 interval = "all";
+
   const params = new URLSearchParams({
-    market:   condition_id,
-    interval: "1d",
-    fidelity: "1",
+    market:   clob_token_id,   // must be CLOB token ID, not condition_id
+    interval,
+    fidelity: "60",            // 60-minute buckets — good balance of detail vs size
   });
   try {
     const res = await fetch(`${GAMMA_BASE}/prices-history?${params}`, {
@@ -232,8 +284,7 @@ export async function fetchHistoricalPrices(
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const history: GammaPricePoint[] = data.history ?? [];
-    return history.slice(-days);
+    return (data.history ?? []) as GammaPricePoint[];
   } catch {
     return [];
   }

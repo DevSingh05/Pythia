@@ -43,22 +43,59 @@ export async function getProbHistory(
 export async function upsertMarket(market: {
   condition_id: string;
   question: string;
+  description?: string;
   category?: string;
+  slug?: string;
+  volume24h?: number;
+  liquidity?: number;
+  clob_token_id?: string;
+  tags?: any;
+  active?: boolean;
+  closed?: boolean;
   resolution_ts?: string;
+  current_prob?: number;
+  current_vol?: number;
+  vol_source?: string;
 }): Promise<void> {
   await sql`
-    INSERT INTO markets (condition_id, question, category, resolution_ts, updated_at)
+    INSERT INTO markets (
+      condition_id, question, category, resolution_ts, updated_at,
+      description, slug, volume24h, liquidity, clob_token_id, tags, active, closed,
+      current_prob, current_vol, vol_source
+    )
     VALUES (
       ${market.condition_id},
       ${market.question},
       ${market.category ?? null},
       ${market.resolution_ts ?? null},
-      NOW()
+      NOW(),
+      ${market.description ?? null},
+      ${market.slug ?? null},
+      ${market.volume24h ?? 0},
+      ${market.liquidity ?? 0},
+      ${market.clob_token_id ?? null},
+      ${market.tags ? JSON.stringify(market.tags) : '[]'},
+      ${market.active ?? true},
+      ${market.closed ?? false},
+      ${market.current_prob ?? null},
+      ${market.current_vol ?? null},
+      ${market.vol_source ?? null}
     )
     ON CONFLICT (condition_id) DO UPDATE SET
       question      = EXCLUDED.question,
       category      = EXCLUDED.category,
       resolution_ts = EXCLUDED.resolution_ts,
+      description   = EXCLUDED.description,
+      slug          = COALESCE(EXCLUDED.slug, markets.slug),
+      volume24h     = EXCLUDED.volume24h,
+      liquidity     = EXCLUDED.liquidity,
+      clob_token_id = EXCLUDED.clob_token_id,
+      tags          = EXCLUDED.tags,
+      active        = EXCLUDED.active,
+      closed        = EXCLUDED.closed,
+      current_prob  = COALESCE(markets.current_prob, EXCLUDED.current_prob),
+      current_vol   = COALESCE(markets.current_vol, EXCLUDED.current_vol),
+      vol_source    = COALESCE(markets.vol_source, EXCLUDED.vol_source),
       updated_at    = NOW()
   `;
 }
@@ -95,16 +132,21 @@ export async function resolveMarket(
 export async function searchMarkets(
   query: string,
   limit: number = 20
-): Promise<Array<{ condition_id: string; question: string; category: string; current_prob: number; current_vol: number }>> {
+): Promise<Array<{ 
+  condition_id: string; question: string; category: string; current_prob: number; current_vol: number;
+  slug: string; description: string; volume24h: number; liquidity: number; clob_token_id: string; tags: any; active: boolean; closed: boolean; resolution_ts: string;
+}>> {
   const rows = await sql`
-    SELECT condition_id, question, category, current_prob, current_vol
+    SELECT condition_id, question, category, current_prob, current_vol,
+           slug, description, volume24h, liquidity, clob_token_id, tags, active, closed, resolution_ts
     FROM markets
-    WHERE resolved = FALSE
+    WHERE resolved = FALSE AND closed = FALSE
+      AND (resolution_ts IS NULL OR resolution_ts >= NOW())
       AND (question ILIKE ${"%" + query + "%"} OR category ILIKE ${"%" + query + "%"})
-    ORDER BY updated_at DESC
+    ORDER BY volume24h DESC, updated_at DESC
     LIMIT ${limit}
   `;
-  return rows as Array<{ condition_id: string; question: string; category: string; current_prob: number; current_vol: number }>;
+  return rows as Array<any>;
 }
 
 export async function getMarket(condition_id: string) {

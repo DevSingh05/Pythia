@@ -29,7 +29,11 @@ export default function MarketPage() {
   const [historyInterval, setHistoryInterval] = useState<'1h' | '6h' | '1d' | '7d' | '30d'>('7d')
 
   const { market, loading: mktLoading, error: mktError } = useMarket(id)
-  const { history, loading: histLoading } = usePriceHistory(id, historyInterval)
+  const { history, loading: histLoading } = usePriceHistory(
+    market?.clobTokenId ?? '',
+    historyInterval,
+    id,
+  )
   const {
     data: chain,
     loading: chainLoading,
@@ -110,7 +114,7 @@ export default function MarketPage() {
                     <span>Liquidity: {fmtUSDC(market.liquidity)}</span>
                   </div>
                   <a
-                    href={`https://polymarket.com/event/${market.conditionId}`}
+                    href={`https://polymarket.com/event/${market.slug}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-accent hover:underline"

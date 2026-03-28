@@ -1,15 +1,16 @@
 /**
  * Server-side proxy for Polymarket Gamma API market list.
  * Avoids CORS — the browser calls /api/markets, this calls gamma-api server-to-server.
+ * Gamma API already includes an `events` array on each market in list responses.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const GAMMA = 'https://gamma-api.polymarket.com'
+const BACKEND = process.env.MARKET_DATA_SERVICE_URL ?? 'http://localhost:3001'
 
 export async function GET(req: NextRequest) {
   const qs = req.nextUrl.searchParams.toString()
-  const url = `${GAMMA}/markets${qs ? `?${qs}` : ''}`
+  const url = `${BACKEND}/markets${qs ? `?${qs}` : ''}`
 
   let upstream: Response
   try {

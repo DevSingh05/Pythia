@@ -16,7 +16,7 @@ declare const Bun: { serve: (opts: { port: number; fetch: (req: Request) => Prom
 
 import { redis, keys }   from "./redis.js";
 import { searchMarkets, getMarket, getProbHistory, listSimulations, getSimulationSeries, upsertMarket } from "./db.js";
-import { fetchMarkets, fetchMarket, resolveYesTokenId, verifyApiKey } from "./polymarket.js";
+import { fetchMarkets, fetchMarket, fetchHistoricalPrices, resolveYesTokenId, verifyApiKey } from "./polymarket.js";
 import { estimateVol } from "./vol.js";
 import { startPolling, registerMarket, onResolution } from "./poller.js";
 import type { ResolutionEvent } from "./types.js";
@@ -80,14 +80,23 @@ async function router(req: Request): Promise<Response> {
     let markets = await searchMarkets(q, limit);
 
     // If empty, fall back to Polymarket Gamma API and hydrate DB
-    if (markets.length === 0 && q.length > 0) {
-      const raw = await fetchMarkets(q, limit);
+    if (markets.length === 0) {
+      const raw = await fetchMarkets(q || "", limit);
       for (const m of raw) {
         await upsertMarket({
           condition_id:  m.conditionId,
           question:      m.question,
+          description:   m.description,
           category:      m.category,
           resolution_ts: m.endDate ?? undefined,
+          slug:          m.events?.[0]?.slug ?? m.slug ?? m.conditionId,
+          volume24h:     m.volume24hr,
+          liquidity:     m.liquidity,
+          clob_token_id: m.clobTokenIds?.[0],
+          tags:          m.tags,
+          active:        m.active,
+          closed:        m.closed,
+          current_prob:  m.tokens?.find(t => t.outcome.toLowerCase() === 'yes')?.price,
         });
       }
       markets = await searchMarkets(q, limit);
@@ -114,8 +123,17 @@ async function router(req: Request): Promise<Response> {
       await upsertMarket({
         condition_id:  raw.conditionId,
         question:      raw.question,
+        description:   raw.description,
         category:      raw.category,
         resolution_ts: raw.endDate ?? undefined,
+        slug:          raw.events?.[0]?.slug ?? raw.slug ?? raw.conditionId,
+        volume24h:     raw.volume24hr,
+        liquidity:     raw.liquidity,
+        clob_token_id: raw.clobTokenIds?.[0],
+        tags:          raw.tags,
+        active:        raw.active,
+        closed:        raw.closed,
+        current_prob:  raw.tokens?.find(t => t.outcome.toLowerCase() === 'yes')?.price,
       });
       market = await getMarket(condition_id);
     }
@@ -173,8 +191,42 @@ async function router(req: Request): Promise<Response> {
   if (history && req.method === "GET") {
     const condition_id = history[1];
     const days = parseInt(url.searchParams.get("days") ?? "30");
-    const rows = await getProbHistory(condition_id, days);
-    return json({ condition_id, history: rows });
+    const rawRows = await getProbHistory(condition_id, days);
+
+    // Convert to { t, p } for frontend
+    let historyData = rawRows.map(r => ({
+      t: new Date(r.ts).getTime(),
+      p: r.prob
+    })).reverse(); // DB is DESC, frontend wants ASC
+
+    // Supplement with Gamma API if local cache is sparse.
+    // MUST use the CLOB token ID (clob_token_id), not condition_id —
+    // the Gamma /prices-history endpoint requires the CLOB asset ID.
+    if (historyData.length < 50) {
+      try {
+        const market = await getMarket(condition_id);
+        const clobTokenId = market?.clob_token_id ?? "";
+        if (clobTokenId) {
+          const gammaHistory = await fetchHistoricalPrices(clobTokenId, days);
+          const formattedGamma = gammaHistory.map(row => ({
+            t: row.t < 1e12 ? row.t * 1000 : row.t,
+            p: row.p,
+          }));
+
+          if (historyData.length === 0) {
+            historyData = formattedGamma;
+          } else {
+            const oldestLocal = historyData[0].t;
+            const olderGamma = formattedGamma.filter(r => r.t < oldestLocal);
+            historyData = [...olderGamma, ...historyData];
+          }
+        }
+      } catch (e) {
+        console.error("[history] Failed to fetch from Gamma:", e);
+      }
+    }
+
+    return json({ condition_id, history: historyData });
   }
 
   // GET /markets/:id/vol
