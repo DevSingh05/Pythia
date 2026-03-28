@@ -1,13 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
+/**
+ * Server-side proxy for Polymarket Gamma API market list.
+ * Avoids CORS — the browser calls /api/markets, this calls gamma-api server-to-server.
+ */
 
-const MDS = process.env.MARKET_DATA_SERVICE_URL!;
+import { NextRequest, NextResponse } from 'next/server'
+
+const GAMMA = 'https://gamma-api.polymarket.com'
 
 export async function GET(req: NextRequest) {
-  const q     = req.nextUrl.searchParams.get("q") ?? "";
-  const limit = req.nextUrl.searchParams.get("limit") ?? "20";
-  const res   = await fetch(`${MDS}/markets?q=${encodeURIComponent(q)}&limit=${limit}`, {
-    next: { revalidate: 30 },
-  });
-  const data = await res.json();
-  return NextResponse.json(data);
+  const qs = req.nextUrl.searchParams.toString()
+  const url = `${GAMMA}/markets${qs ? `?${qs}` : ''}`
+
+  let upstream: Response
+  try {
+    upstream = await fetch(url, { next: { revalidate: 30 } })
+  } catch {
+    return NextResponse.json({ error: 'Failed to reach Polymarket' }, { status: 502 })
+  }
+
+  const data = await upstream.json().catch(() => null)
+  return NextResponse.json(data, { status: upstream.status })
 }

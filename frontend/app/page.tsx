@@ -1,114 +1,137 @@
-/**
- * Landing page — market search.
- */
+'use client'
 
-"use client";
+import { useState } from 'react'
+import Navbar from '@/components/Navbar'
+import MarketCard, { MarketCardSkeleton } from '@/components/MarketCard'
+import { useMarkets } from '@/hooks/useMarkets'
+import { cn } from '@/lib/utils'
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { searchMarkets } from "@/lib/api";
+const CATEGORIES = [
+  { id: '', label: 'All' },
+  { id: 'politics', label: 'Politics' },
+  { id: 'crypto', label: 'Crypto' },
+  { id: 'economics', label: 'Economics' },
+  { id: 'sports', label: 'Sports' },
+  { id: 'science', label: 'Science' },
+  { id: 'geo', label: 'Geopolitics' },
+]
 
-export default function Home() {
-  const router  = useRouter();
-  const [query, setQuery] = useState("");
+export default function HomePage() {
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('')
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["markets", query],
-    queryFn:  () => searchMarkets(query),
-    enabled:  query.length > 1,
-  });
-
-  const markets = data?.markets ?? [];
+  const { markets, loading, error } = useMarkets({
+    limit: 20,
+    tag: category || undefined,
+    q: query || undefined,
+  })
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-start pt-24 px-4">
-      {/* Header */}
-      <div className="mb-12 text-center">
-        <h1 className="text-5xl font-bold tracking-tight text-white mb-3">
-          Pythia
-        </h1>
-        <p className="text-lg text-gray-400 max-w-md">
-          Options on prediction market probabilities.{" "}
-          <span className="text-white">Trade the movement, not the outcome.</span>
-        </p>
-        <div className="mt-4 flex gap-3 justify-center text-sm text-gray-500">
-          <span>American style</span>
-          <span>·</span>
-          <span>Live Greeks</span>
-          <span>·</span>
-          <span>Early exercise boundary</span>
+    <div className="min-h-screen bg-bg">
+      <Navbar onSearch={setQuery} />
+
+      {/* Hero */}
+      <div className="border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 py-10 space-y-3">
+          <p className="text-xs text-muted font-medium uppercase tracking-widest">
+            Options on Prediction Markets
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
+            Trade probability, not outcomes.
+          </h1>
+          <p className="text-muted-fg text-sm max-w-lg leading-relaxed">
+            Pythia layers options on Polymarket YES% probabilities.
+            Buy calls when you expect a probability to rise, puts when you expect it to fall.
+            Priced with a Logit-Normal model for bounded underlyings.
+          </p>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="w-full max-w-xl">
-        <input
-          type="text"
-          placeholder="Search markets — Bitcoin, Election, Fed rate..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full px-5 py-4 rounded-xl bg-gray-900 border border-gray-800 text-white
-                     placeholder-gray-500 text-lg focus:outline-none focus:border-blue-500
-                     focus:ring-1 focus:ring-blue-500 transition"
-          autoFocus
-        />
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+        {/* Category filter */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {CATEGORIES.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setCategory(cat.id)}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors shrink-0',
+                category === cat.id
+                  ? 'bg-accent text-white font-medium'
+                  : 'bg-surface border border-border text-muted hover:text-zinc-200 hover:border-zinc-600'
+              )}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
 
-        {/* Results */}
-        {query.length > 1 && (
-          <div className="mt-2 rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-            {isLoading && (
-              <div className="p-4 text-gray-500 text-sm">Searching...</div>
-            )}
-
-            {!isLoading && markets.length === 0 && (
-              <div className="p-4 text-gray-500 text-sm">No active markets found.</div>
-            )}
-
-            {markets.map((m: { condition_id: string; question: string; category: string; current_prob: number; current_vol: number }) => (
-              <button
-                key={m.condition_id}
-                onClick={() => router.push(`/market/${m.condition_id}`)}
-                className="w-full text-left px-5 py-4 hover:bg-gray-800 transition border-b
-                           border-gray-800 last:border-0 group"
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div>
-                    <div className="text-white font-medium group-hover:text-blue-400 transition line-clamp-2">
-                      {m.question}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">{m.category}</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    {m.current_prob !== null && (
-                      <div className="text-lg font-bold text-white">
-                        {(m.current_prob * 100).toFixed(0)}%
-                      </div>
-                    )}
-                    {m.current_vol !== null && (
-                      <div className="text-xs text-gray-500">
-                        σ {(m.current_vol * 100).toFixed(0)}%
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
+        {/* Error */}
+        {error && (
+          <div className="rounded-md bg-red-muted border border-red/20 p-3.5 text-sm text-red">
+            Failed to load markets — {error}
           </div>
         )}
+
+        {/* Markets grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {loading
+            ? Array.from({ length: 8 }).map((_, i) => <MarketCardSkeleton key={i} />)
+            : markets.map(market => <MarketCard key={market.id} market={market} />)
+          }
+        </div>
+
+        {!loading && !error && markets.length === 0 && (
+          <div className="text-center py-16">
+            <p className="text-muted text-sm">No markets found.</p>
+            {query && (
+              <button onClick={() => setQuery('')} className="text-xs text-accent hover:underline mt-2">
+                Clear search
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* How it works */}
+        <div className="pt-8 border-t border-border">
+          <h2 className="text-sm font-medium text-muted uppercase tracking-widest mb-4">How it works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {[
+              { step: '01', title: 'Pick a market', desc: 'Any active Polymarket contract. The YES% is your underlying.' },
+              { step: '02', title: 'Choose direction', desc: 'Call if you expect YES% to rise. Put if you expect it to fall.' },
+              { step: '03', title: 'Set your strike', desc: 'Pick a probability target — 30%, 50%, 70%. Breakeven shown live.' },
+              { step: '04', title: 'View P&L', desc: 'Payoff curve updates in real time. Max win and loss clearly shown.' },
+            ].map(({ step, title, desc }) => (
+              <div key={step} className="bg-card border border-border rounded-lg p-4 space-y-1.5">
+                <div className="text-xs text-muted tabular-nums">{step}</div>
+                <div className="text-sm font-medium text-zinc-200">{title}</div>
+                <div className="text-xs text-muted leading-relaxed">{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Model callout */}
+        <div className="rounded-lg bg-card border border-border p-5 space-y-3">
+          <h3 className="text-sm font-medium text-zinc-200">Logit-Normal Pricing</h3>
+          <p className="text-xs text-muted leading-relaxed max-w-2xl">
+            Black-Scholes assumes unbounded lognormal prices and can't price bounded probabilities.
+            Pythia models{' '}
+            <span className="font-mono text-zinc-300">logit(p) = ln(p / 1−p)</span>, which is
+            unbounded and follows Brownian motion — enabling closed-form pricing with proper Greeks.
+          </p>
+          <div className="font-mono text-xs text-muted bg-surface rounded-md p-3 space-y-1 border border-border">
+            <div><span className="text-zinc-400">L₀</span> = logit(p₀) = ln(p₀ / (1 − p₀))</div>
+            <div><span className="text-zinc-400">L_T</span> ~ N(L₀, σ²τ)  where τ = time to expiry</div>
+            <div><span className="text-zinc-400">p_T</span> = sigmoid(L_T) = 1 / (1 + e^(−L_T))</div>
+            <div><span className="text-zinc-400">C</span>   = Φ((L₀ − logit(K)) / (σ√τ))</div>
+          </div>
+        </div>
       </div>
 
-      {/* Demo link */}
-      <div className="mt-16 text-center">
-        <p className="text-gray-600 text-sm mb-3">See it in action</p>
-        <button
-          onClick={() => router.push("/simulation/demo_eth_call")}
-          className="px-6 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300
-                     hover:text-white text-sm transition border border-gray-700"
-        >
-          Watch demo replay →
-        </button>
-      </div>
-    </main>
-  );
+      <footer className="border-t border-border mt-12 py-6 text-center text-xs text-muted">
+        Pythia · Options on prediction market probabilities
+      </footer>
+    </div>
+  )
 }

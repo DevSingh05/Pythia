@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev":   "bun run --hot --env-file=../.env src/index.ts",
+    "dev":   "bun run --hot --env-file=../../.env src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir=dist --target=bun"
   },
