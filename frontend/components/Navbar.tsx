@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+
 import { Search, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,8 +11,6 @@ interface NavbarProps {
 }
 
 export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
-  const [query, setQuery] = useState(searchQuery)
-
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-bg/80 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 h-13 flex items-center gap-5">
@@ -30,11 +28,8 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
           <input
             type="text"
             placeholder="Search markets..."
-            value={query}
-            onChange={e => {
-              setQuery(e.target.value)
-              onSearch?.(e.target.value)
-            }}
+            value={searchQuery}
+            onChange={e => onSearch?.(e.target.value)}
             className={cn(
               'w-full bg-surface border border-border rounded-md pl-9 pr-3 py-1.5',
               'text-sm placeholder:text-muted text-zinc-200',

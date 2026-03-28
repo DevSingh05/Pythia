@@ -16,15 +16,19 @@ export function useMarkets(params?: { limit?: number; tag?: string; q?: string }
     error: null,
   })
 
+  const limit = params?.limit
+  const tag   = params?.tag
+  const q     = params?.q
+
   const load = useCallback(async () => {
     setState(s => ({ ...s, loading: true, error: null }))
     try {
-      const markets = await fetchMarkets(params)
+      const markets = await fetchMarkets({ limit, tag, q })
       setState({ markets, loading: false, error: null })
     } catch (e) {
       setState({ markets: [], loading: false, error: (e as Error).message })
     }
-  }, [params?.limit, params?.tag, params?.q])
+  }, [limit, tag, q])
 
   useEffect(() => { load() }, [load])
 

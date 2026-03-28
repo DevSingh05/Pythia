@@ -16,17 +16,22 @@ const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polym
 export async function GET(req: NextRequest) {
   const incoming = req.nextUrl.searchParams
 
+  const tag = incoming.get('tag') ?? ''
+  const q   = incoming.get('q')   ?? ''
+
+  // Fetch a larger set when filtering — client-side filter reduces results
+  const fetchLimit = tag ? '100' : (incoming.get('limit') ?? '20')
+
   const params = new URLSearchParams({
-    active:       'true',
-    closed:       'false',
-    // Official Gamma sort field (no underscore, per API docs)
-    order:        'volume24hr',
-    ascending:    'false',
-    limit:        incoming.get('limit')  ?? '20',
-    offset:       incoming.get('offset') ?? '0',
+    active:    'true',
+    closed:    'false',
+    order:     'volume24hr',
+    ascending: 'false',
+    limit:     fetchLimit,
+    offset:    incoming.get('offset') ?? '0',
   })
-  if (incoming.get('q'))   params.set('q',      incoming.get('q')!)
-  if (incoming.get('tag')) params.set('tag_id', incoming.get('tag')!)
+  // q searches event titles on the Gamma events endpoint
+  if (q) params.set('q', q)
 
   let upstream: Response
   try {
@@ -48,12 +53,11 @@ export async function GET(req: NextRequest) {
   // outcomes like "Will Haiti win?". Cap negRisk events to the top 5 by volume.
   const MAX_NEGRISK_OUTCOMES = 5
 
-  const markets = events.flatMap((event: any) => {
+  let markets = events.flatMap((event: any) => {
     const eventCtx = { id: event.id, slug: event.slug, title: event.title }
     let mktList: any[] = event.markets ?? []
 
     if (event.negRisk && mktList.length > MAX_NEGRISK_OUTCOMES) {
-      // Keep only top outcomes by 24h volume to avoid list pollution
       mktList = [...mktList]
         .sort((a, b) => (b.volume24hr ?? 0) - (a.volume24hr ?? 0))
         .slice(0, MAX_NEGRISK_OUTCOMES)
@@ -63,9 +67,34 @@ export async function GET(req: NextRequest) {
       ...mkt,
       volume24hr: mkt.volume24hr ?? event.volume24hr ?? 0,
       liquidity:  mkt.liquidityNum ?? mkt.liquidity ?? event.liquidity ?? 0,
-      events: [eventCtx],
+      events:     [eventCtx],
+      // carry event tags so client-side category filter can use them
+      tags:       mkt.tags ?? event.tags ?? [],
     }))
   })
+
+  // Client-side tag filter — Gamma events endpoint doesn't support tag_id
+  if (tag) {
+    const tagLower = tag.toLowerCase()
+    markets = markets.filter((mkt: any) =>
+      mkt.tags?.some((t: any) =>
+        (t.label ?? t.id ?? t).toString().toLowerCase().includes(tagLower)
+      )
+    )
+  }
+
+  // Client-side q filter against individual market questions (Gamma q only matches event titles)
+  if (q) {
+    const qLower = q.toLowerCase()
+    markets = markets.filter((mkt: any) =>
+      (mkt.question ?? '').toLowerCase().includes(qLower) ||
+      (mkt.events?.[0]?.title ?? '').toLowerCase().includes(qLower)
+    )
+  }
+
+  // Trim to requested limit after filtering
+  const limit = parseInt(incoming.get('limit') ?? '20', 10)
+  markets = markets.slice(0, limit)
 
   return NextResponse.json(markets, { status: 200 })
 }

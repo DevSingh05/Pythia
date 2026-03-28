@@ -1,34 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from '@/components/Navbar'
 import MarketCard, { MarketCardSkeleton } from '@/components/MarketCard'
 import { useMarkets } from '@/hooks/useMarkets'
 import { cn } from '@/lib/utils'
 
+// tag ids match Polymarket tag labels (case-insensitive substring match in proxy)
 const CATEGORIES = [
   { id: '', label: 'All' },
-  { id: 'politics', label: 'Politics' },
-  { id: 'crypto', label: 'Crypto' },
-  { id: 'economics', label: 'Economics' },
-  { id: 'sports', label: 'Sports' },
-  { id: 'science', label: 'Science' },
-  { id: 'geo', label: 'Geopolitics' },
+  { id: 'Politics', label: 'Politics' },
+  { id: 'Crypto', label: 'Crypto' },
+  { id: 'Economics', label: 'Economics' },
+  { id: 'Sports', label: 'Sports' },
+  { id: 'Science', label: 'Science' },
+  { id: 'Geopolitics', label: 'Geopolitics' },
 ]
 
 export default function HomePage() {
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('')
+
+  // Debounce search — wait 350ms after user stops typing before fetching
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 350)
+    return () => clearTimeout(timer)
+  }, [query])
 
   const { markets, loading, error } = useMarkets({
     limit: 20,
     tag: category || undefined,
-    q: query || undefined,
+    q: debouncedQuery || undefined,
   })
+
+  function clearSearch() {
+    setQuery('')
+    setDebouncedQuery('')
+  }
 
   return (
     <div className="min-h-screen bg-bg">
-      <Navbar onSearch={setQuery} />
+      <Navbar searchQuery={query} onSearch={setQuery} />
 
       {/* Hero */}
       <div className="border-b border-border">
@@ -85,7 +98,7 @@ export default function HomePage() {
           <div className="text-center py-16">
             <p className="text-muted text-sm">No markets found.</p>
             {query && (
-              <button onClick={() => setQuery('')} className="text-xs text-accent hover:underline mt-2">
+              <button onClick={clearSearch} className="text-xs text-accent hover:underline mt-2">
                 Clear search
               </button>
             )}
