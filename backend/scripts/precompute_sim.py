@@ -19,7 +19,7 @@ import os
 import sys
 import psycopg2
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pricing-service"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from pricer import american_option_binomial, greeks as compute_greeks, clamp_sigma
 
 
