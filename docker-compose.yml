@@ -20,7 +20,7 @@ services:
     command: redis-server --save ""   # no persistence in dev
 
   pricing:
-    build: ./pricing-service
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
