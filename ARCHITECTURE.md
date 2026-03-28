@@ -1,4 +1,4 @@
-# ProbX — Architecture Plan & Stress Test
+# Pythia — Architecture Plan & Stress Test
 > Options on Prediction Market Probabilities · Polymarket Hackathon · Track: Risk & Visualization
 
 ---
@@ -215,7 +215,7 @@ CREATE TABLE vol_snapshots (
 
 ### 4.1 Contract Style: American
 
-All ProbX contracts are **American style** — exercise any time before expiry.
+All Pythia contracts are **American style** — exercise any time before expiry.
 
 **Why not European:**
 - Prediction market probabilities can spike violently on news events and then reverse
@@ -223,7 +223,7 @@ All ProbX contracts are **American style** — exercise any time before expiry.
 - If the underlying Polymarket market resolves early (p snaps to 0 or 1), American exercise prevents forced holding through a bad outcome
 - In the absence of a liquid secondary market, "sell to close" = "exercise at model price" — American is the honest design
 
-**Auto-settlement rule:** If the underlying Polymarket market resolves (p → 0 or 1) before a ProbX option's expiry, all open contracts on that market settle immediately at the resolution value.
+**Auto-settlement rule:** If the underlying Polymarket market resolves (p → 0 or 1) before a Pythia option's expiry, all open contracts on that market settle immediately at the resolution value.
 
 ### 4.2 Core Math
 
@@ -352,7 +352,7 @@ def vanilla_call_price(p0, K, sigma, tau):
 
 ### 4.7 Discrete Strike Grid
 
-ProbX does not offer arbitrary strike prices. Available contracts are determined dynamically per market:
+Pythia does not offer arbitrary strike prices. Available contracts are determined dynamically per market:
 
 ```python
 STRIKE_GRID  = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
@@ -653,7 +653,7 @@ Gamma:  shown on hover only  (avoids clutter in chain table)
 
 ### 8.4 Pro View Extras
 
-**Implied distribution curve** — rendered above the chain. Shows `p_T ~ logit-normal(L0, σ²τ)` mapped back through sigmoid. Wide bell = high vol, narrow = conviction, skewed = boundary effect. Unique to ProbX — no other tool shows this.
+**Implied distribution curve** — rendered above the chain. Shows `p_T ~ logit-normal(L0, σ²τ)` mapped back through sigmoid. Wide bell = high vol, narrow = conviction, skewed = boundary effect. Unique to Pythia — no other tool shows this.
 
 **Early exercise boundary** — a separate panel below the chain. Shows `p*` vs time remaining. Zone above the line = exercise now. Zone below = hold for time value. Crucial for American options — tells traders exactly when to pull the trigger.
 
@@ -735,7 +735,7 @@ UI controls: ► play  ❚❚ pause  ◄► scrub  2× speed
  Instead we held. By expiry, probability was at 71%.
  We collected $0.21 intrinsic. Net profit on $0.28 invested.
 
- No Polymarket trader could make this trade before ProbX.
+ No Polymarket trader could make this trade before Pythia.
  They could only bet on the outcome. We traded the movement."
 ```
 
@@ -830,7 +830,7 @@ UI controls: ► play  ❚❚ pause  ◄► scrub  2× speed
 **Mitigation:** In-memory LRU fallback (last 60s). Pricing recomputes on every request.
 
 #### F9: Early Resolution Before Our Expiry
-**Trigger:** Underlying Polymarket market resolves (p→0 or p→1) while ProbX contracts are open.
+**Trigger:** Underlying Polymarket market resolves (p→0 or p→1) while Pythia contracts are open.
 **Mitigation:** Market Data Service detects p ∈ {0, 1} → publishes resolution event → all open contracts on that market auto-settle at resolution value → UI shows "Market Resolved — Contract Settled".
 
 ### 11.3 Stress Test Matrix
@@ -955,4 +955,4 @@ Vol pipeline:   diffs  = logit(p_{t+1}) - logit(p_t)     [filtered, winsorized]
 
 ---
 
-*ProbX — The derivatives layer prediction markets were always missing.*
+*Pythia — The derivatives layer prediction markets were always missing.*

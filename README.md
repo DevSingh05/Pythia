@@ -1,4 +1,4 @@
-# Pythia / ProbX
+# Pythia
 **The options layer prediction markets were always missing.**
 
 Options on Polymarket YES% probabilities. Trade the movement, not the outcome.
@@ -9,7 +9,7 @@ Options on Polymarket YES% probabilities. Trade the movement, not the outcome.
 
 Every Polymarket contract has a YES% price — a number that moves between 0% and 100% as the crowd updates its belief. Right now traders can only bet on where it ends up.
 
-ProbX lets you buy a CALL at a 50% strike when a market is at 40%. If the probability climbs above 50%, you're in the money. You never need to wait for the event to resolve. You're trading probability momentum.
+Pythia lets you buy a CALL at a 50% strike when a market is at 40%. If the probability climbs above 50%, you're in the money. You never need to wait for the event to resolve. You're trading probability momentum.
 
 ---
 
@@ -22,9 +22,9 @@ The YES% probability on any live Polymarket contract. It trades continuously, re
 **American** — exercise any time before your expiry date. If the probability spikes on a news event, you capture the gain immediately. You are not forced to hold through a reversal.
 
 ### Expiry
-ProbX options expire on a fixed date **before** the underlying Polymarket market resolves. You cash-settle at whatever the probability is on your expiry date. You never need to know or care how the event actually resolves.
+Pythia options expire on a fixed date **before** the underlying Polymarket market resolves. You cash-settle at whatever the probability is on your expiry date. You never need to know or care how the event actually resolves.
 
-**Auto-settlement:** If the underlying market resolves early (probability snaps to 0% or 100%), all open ProbX contracts on that market settle immediately at the resolution value.
+**Auto-settlement:** If the underlying market resolves early (probability snaps to 0% or 100%), all open Pythia contracts on that market settle immediately at the resolution value.
 
 ### Pricing Model
 Probability lives in [0, 1]. Black-Scholes assumes unbounded prices — it cannot be applied directly.
@@ -86,4 +86,4 @@ All market data flows server-side. The browser never calls Polymarket APIs direc
 
 **Track:** Risk & Visualization
 **Event:** Polymarket Hackathon
-**Project:** ProbX — options on prediction market probabilities
+**Project:** Pythia — options on prediction market probabilities

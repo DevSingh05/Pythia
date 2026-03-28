@@ -26,7 +26,7 @@ export default function Home() {
       {/* Header */}
       <div className="mb-12 text-center">
         <h1 className="text-5xl font-bold tracking-tight text-white mb-3">
-          ProbX
+          Pythia
         </h1>
         <p className="text-lg text-gray-400 max-w-md">
           Options on prediction market probabilities.{" "}

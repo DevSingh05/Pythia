@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-compute a ProbX demo simulation and insert into Postgres.
+Pre-compute a Pythia demo simulation and insert into Postgres.
 
 Usage:
     python scripts/precompute_sim.py \

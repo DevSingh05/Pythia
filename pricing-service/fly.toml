@@ -1,5 +1,5 @@
-# Fly.io config for ProbX Pricing Service
-app = "probx-pricing"
+# Fly.io config for Pythia Pricing Service
+app = "pythia-pricing"
 primary_region = "iad"
 
 [build]

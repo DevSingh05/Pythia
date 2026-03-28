@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER:     probx
-      POSTGRES_PASSWORD: probx
-      POSTGRES_DB:       probx
+      POSTGRES_USER:     pythia
+      POSTGRES_PASSWORD: pythia
+      POSTGRES_DB:       pythia
     ports:
       - "5432:5432"
     volumes:
@@ -35,7 +35,7 @@ services:
       - .env
     environment:
       PORT:         3001
-      DATABASE_URL: postgresql://probx:probx@postgres:5432/probx
+      DATABASE_URL: postgresql://pythia:pythia@postgres:5432/pythia
     depends_on:
       - postgres
       - redis

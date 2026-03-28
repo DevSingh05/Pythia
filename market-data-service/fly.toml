@@ -1,4 +1,4 @@
-app = "probx-market-data"
+app = "pythia-market-data"
 primary_region = "iad"
 
 [build]

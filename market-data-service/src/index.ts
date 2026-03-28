@@ -1,5 +1,5 @@
 /**
- * ProbX Market Data Service — Bun HTTP server
+ * Pythia Market Data Service — Bun HTTP server
  *
  * Responsibilities:
  *  - Poll Polymarket CLOB for live probabilities

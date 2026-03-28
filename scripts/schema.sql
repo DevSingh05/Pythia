@@ -1,4 +1,4 @@
--- ProbX database schema
+-- Pythia database schema
 
 -- Raw probability time-series
 CREATE TABLE IF NOT EXISTS prob_series (

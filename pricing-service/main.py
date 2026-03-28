@@ -1,5 +1,5 @@
 """
-ProbX Pricing Service — FastAPI
+Pythia Pricing Service — FastAPI
 Stateless pure-math service: no DB access, no external calls.
 """
 
@@ -28,7 +28,7 @@ from pricer import (
 )
 
 app = FastAPI(
-    title="ProbX Pricing Service",
+    title="Pythia Pricing Service",
     description="American options on logit-normal bounded underlying",
     version="1.0.0",
 )

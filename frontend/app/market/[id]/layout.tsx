@@ -76,7 +76,7 @@ export default function MarketLayout({
           onClick={() => router.push("/")}
           className="text-gray-500 hover:text-white text-sm transition"
         >
-          ← ProbX
+          ← Pythia
         </button>
         <div className="flex items-center gap-4">
           <LiveProbBadge />

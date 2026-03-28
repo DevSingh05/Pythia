@@ -1,5 +1,5 @@
 """
-ProbX Pricing Engine — American options on logit-normal bounded underlying.
+Pythia Pricing Engine — American options on logit-normal bounded underlying.
 
 Mathematical model:
   L = logit(p) = ln(p/(1-p))  follows driftless Brownian motion

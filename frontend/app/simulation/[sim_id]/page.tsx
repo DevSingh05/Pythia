@@ -84,7 +84,7 @@ export default function SimulationPage() {
           onClick={() => router.push("/")}
           className="text-gray-500 hover:text-white text-sm"
         >
-          ← ProbX
+          ← Pythia
         </button>
         <span className="text-gray-600 text-sm">Demo Simulation</span>
       </nav>

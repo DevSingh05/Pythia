@@ -3,7 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "ProbX — Options on Prediction Markets",
+  title: "Pythia — Options on Prediction Markets",
   description:
     "Trade the movement, not the outcome. American options on Polymarket YES% probabilities.",
 };
