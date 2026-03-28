@@ -15,12 +15,9 @@ Requires: DATABASE_URL env var, pricing-service running on localhost:8000
 """
 
 import argparse
-import json
 import os
 import sys
-import httpx
 import psycopg2
-from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pricing-service"))
 from pricer import american_option_binomial, greeks as compute_greeks, clamp_sigma
@@ -32,7 +29,9 @@ def main():
     parser.add_argument("--sim-id",       required=True)
     parser.add_argument("--kind",         default="call", choices=["call", "put"])
     parser.add_argument("--strike",       type=float, default=0.5)
-    parser.add_argument("--expiry-days",  type=int,   default=30)
+    parser.add_argument("--entry-day",    type=int,   default=0,  dest="entry_day",
+                        help="Index of the first tick to use as entry point.")
+    parser.add_argument("--expiry-days",  type=int,   default=30, dest="expiry_days")
     parser.add_argument("--sigma",        type=float, default=None,
                         help="Override vol. If not set, fetches from Polymarket history.")
     args = parser.parse_args()
@@ -68,14 +67,15 @@ def main():
         clamped = [max(1e-6, min(1-1e-6, p)) for p in probs]
         logits  = [float(np.log(p/(1-p))) for p in clamped]
         diffs   = [logits[i+1]-logits[i] for i in range(len(logits)-1)]
-        diffs   = [d for d in diffs if abs(d) < 5]  # rough winsorise
+        lo, hi  = np.percentile(diffs, [1, 99])
+        diffs   = [d for d in diffs if lo <= d <= hi]
         sigma   = clamp_sigma(float(np.std(diffs, ddof=1)) * np.sqrt(252))
 
     print(f"Sigma = {sigma:.4f}")
 
-    # Subset to expiry window
-    series_probs = probs[:args.expiry_days + 1]
-    series_dates = dates[:args.expiry_days + 1]
+    # Subset to expiry window starting at entry_day
+    series_probs = probs[args.entry_day:args.entry_day + args.expiry_days + 1]
+    series_dates = dates[args.entry_day:args.entry_day + args.expiry_days + 1]
 
     # Entry premium
     entry_prob = series_probs[0]

@@ -10,4 +10,5 @@ export const keys = {
   vol:      (id: string) => `vol:${id}`,
   chain:    (id: string) => `chain:${id}`,
   boundary: (id: string, K: number, kind: string) => `boundary:${id}:${K}:${kind}`,
+  resolved: (id: string) => `resolved:${id}`,
 };

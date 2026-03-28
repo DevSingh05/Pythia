@@ -31,7 +31,7 @@ export async function getProbHistory(
     SELECT ts, prob
     FROM prob_series
     WHERE condition_id = ${condition_id}
-      AND ts >= NOW() - INTERVAL '${days} days'
+      AND ts >= NOW() - (INTERVAL '1 day' * ${days})
     ORDER BY ts DESC
     LIMIT 2000
   `;

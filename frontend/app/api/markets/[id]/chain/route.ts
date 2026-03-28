@@ -15,6 +15,12 @@ export async function GET(
 ) {
   const condition_id = params.id;
 
+  // 0. Guard: don't serve chain for resolved markets
+  const resolvedSnap = await redis.get(keys.resolved(condition_id));
+  if (resolvedSnap) {
+    return NextResponse.json({ error: "market resolved" }, { status: 410 });
+  }
+
   // 1. Redis cache hit
   const cached = await redis.get(keys.chain(condition_id));
   if (cached) {
@@ -27,8 +33,9 @@ export async function GET(
   const probSnap = await redis.get<{ prob: number }>(keys.prob(condition_id));
   const volSnap  = await redis.get<{ sigma: number; source: string }>(keys.vol(condition_id));
 
-  let p0    = probSnap?.prob  ?? 0.5;
-  let sigma = volSnap?.sigma  ?? 0.3;
+  let p0       = probSnap?.prob   ?? 0.5;
+  let sigma    = volSnap?.sigma   ?? 0.3;
+  let volSource = volSnap?.source ?? "default";
 
   // Fallback: ask MDS directly
   if (!probSnap) {
@@ -36,8 +43,9 @@ export async function GET(
       const mRes = await fetch(`${MDS}/markets/${condition_id}`);
       if (mRes.ok) {
         const m = await mRes.json();
-        p0    = m.current_prob  ?? p0;
-        sigma = m.current_vol   ?? sigma;
+        p0        = m.current_prob ?? p0;
+        sigma     = m.current_vol  ?? sigma;
+        volSource = m.vol_source   ?? volSource;
       }
     } catch { /* use defaults */ }
   }
@@ -57,9 +65,10 @@ export async function GET(
   }
 
   const data = await pRes.json();
+  const enriched = { ...data, vol_source: volSource };
 
   // 4. Cache for 5s
-  await redis.set(keys.chain(condition_id), data, 5);
+  await redis.set(keys.chain(condition_id), enriched, 5);
 
-  return NextResponse.json(data, { headers: { "X-Cache": "MISS" } });
+  return NextResponse.json(enriched, { headers: { "X-Cache": "MISS" } });
 }

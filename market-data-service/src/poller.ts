@@ -72,11 +72,15 @@ async function tick(condition_id: string): Promise<void> {
   if (state.buffer.length > BUFFER_SIZE) state.buffer.shift();
 
   // Publish to Redis (TTL 5s)
-  await redis.set(
-    keys.prob(condition_id),
-    { prob, ts: ts.toISOString(), condition_id },
-    5
-  );
+  try {
+    await redis.set(
+      keys.prob(condition_id),
+      { prob, ts: ts.toISOString(), condition_id },
+      5
+    );
+  } catch (err) {
+    console.error(`[poller] Redis write failed for ${condition_id}:`, err);
+  }
 
   // Batch DB writes
   state.batchQueue.push({ prob, ts });
