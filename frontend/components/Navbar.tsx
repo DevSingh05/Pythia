@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, LogOut, Briefcase } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
@@ -15,6 +16,19 @@ interface NavbarProps {
 export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
   const { user, loading, signOut } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // Auto-open auth modal when redirected from a protected route
+  useEffect(() => {
+    if (searchParams.get('auth') === 'required' && !loading && !user) {
+      setShowAuth(true)
+      // Clean the query param from the URL without a full navigation
+      const url = new URL(window.location.href)
+      url.searchParams.delete('auth')
+      router.replace(url.pathname + (url.search || ''), { scroll: false })
+    }
+  }, [searchParams, loading, user, router])
 
   return (
     <>
@@ -56,13 +70,15 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
             >
               Markets
             </Link>
-            <Link
-              href="/portfolio"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-zinc-200 rounded-md transition-colors"
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              Portfolio
-            </Link>
+            {user && (
+              <Link
+                href="/portfolio"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-zinc-200 rounded-md transition-colors"
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                Portfolio
+              </Link>
+            )}
           </nav>
 
           {/* Auth controls */}

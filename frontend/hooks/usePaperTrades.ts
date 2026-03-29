@@ -1,21 +1,18 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Position } from '@/lib/api'
+import { Position, fetchOrders, deleteAllOrders } from '@/lib/api'
 import {
   PaperOrder,
   MarketSnapshot,
   EquityPoint,
   PortfolioStats,
-  loadOrders,
-  saveOrders,
-  loadBalance,
-  saveBalance,
   derivePositions,
   buildEquityCurve,
   computePortfolioStats,
   INITIAL_BALANCE,
 } from '@/lib/paperTrade'
+import { useAuth } from '@/hooks/useAuth'
 
 export interface UsePaperTradesReturn {
   orders: PaperOrder[]
@@ -46,61 +43,135 @@ const EMPTY_STATS: PortfolioStats = {
   worstPosition: null,
 }
 
+/** Compute running balance from the order stream — no need to store it separately. */
+function balanceFromOrders(orders: PaperOrder[]): number {
+  return orders.reduce((bal, o) => {
+    return o.side === 'buy' ? bal - o.totalCost : bal + o.totalCost
+  }, INITIAL_BALANCE)
+}
+
+/** Reconstruct a PaperOrder from a backend DB row. */
+function rowToPaperOrder(row: Record<string, unknown>): PaperOrder | null {
+  // Rows saved with metadata carry the full PaperOrder — use it directly.
+  if (row.metadata && typeof row.metadata === 'object') {
+    return row.metadata as PaperOrder
+  }
+  // Older rows (no metadata): reconstruct from structured columns.
+  if (!row.id || !row.market_id) return null
+  const qty  = Number(row.quantity ?? 1)
+  const prem = Number(row.premium ?? 0)
+  return {
+    id:                 String(row.id),
+    timestamp:          row.created_at ? new Date(String(row.created_at)).getTime() : Date.now(),
+    marketId:           String(row.market_id),
+    marketTitle:        String(row.market_id),  // best-effort
+    currentProbAtFill:  0.5,
+    strike:             Number(row.strike),
+    type:               row.type as 'call' | 'put',
+    expiry:             String(row.expiry ?? ''),
+    daysToExpiry:       7,
+    side:               row.side as 'buy' | 'sell',
+    quantity:           qty,
+    premium:            prem,
+    totalCost:          prem * qty,
+    impliedVol:         1.5,
+    status:             'filled',
+  }
+}
+
 export function usePaperTrades(): UsePaperTradesReturn {
-  const [orders, setOrders] = useState<PaperOrder[]>([])
-  const [balance, setBalance] = useState(INITIAL_BALANCE)
-  const [hydrated, setHydrated] = useState(false)
+  const { user, getToken } = useAuth()
+  const [orders, setOrders]           = useState<PaperOrder[]>([])
+  const [hydrated, setHydrated]       = useState(false)
   const [marketPrices, setMarketPrices] = useState<Map<string, MarketSnapshot>>(new Map())
 
-  // Hydrate from localStorage on mount
-  useEffect(() => {
-    setOrders(loadOrders())
-    setBalance(loadBalance())
-    setHydrated(true)
-  }, [])
+  // Balance is always derived from the order stream — never stored separately.
+  const balance = balanceFromOrders(orders)
 
-  // Cross-tab sync
+  // ── Load from Supabase on mount / when user logs in ──────────────────────────
   useEffect(() => {
-    const handler = (e: StorageEvent) => {
-      if (e.key === 'pythia:orders') {
-        setOrders(loadOrders())
-      } else if (e.key === 'pythia:balance') {
-        setBalance(loadBalance())
-      }
+    if (!user) {
+      // Not logged in: start with an empty portfolio.
+      setOrders([])
+      setHydrated(true)
+      return
     }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
-  }, [])
 
+    let cancelled = false
+    setHydrated(false)
+
+    async function loadFromBackend() {
+      const token = await getToken()
+      if (!token || cancelled) { setHydrated(true); return }
+
+      const rows = await fetchOrders(token)
+      if (cancelled) return
+
+      const loaded = rows
+        .map(rowToPaperOrder)
+        .filter((o): o is PaperOrder => o !== null)
+        .sort((a, b) => a.timestamp - b.timestamp)
+
+      setOrders(loaded)
+      setHydrated(true)
+    }
+
+    loadFromBackend()
+    return () => { cancelled = true }
+  }, [user, getToken])
+
+  // ── addOrder: update React state + push to Supabase ──────────────────────────
   const addOrder = useCallback((order: PaperOrder): { success: boolean; error?: string } => {
-    const currentBalance = loadBalance()
+    // Check balance from current orders (derive fresh — no localStorage)
+    const currentBalance = balanceFromOrders(
+      // read current state synchronously via functional updater below
+      orders
+    )
 
     if (order.side === 'buy' && order.totalCost > currentBalance) {
-      return { success: false, error: `Insufficient balance. Need $${order.totalCost.toFixed(2)}, have $${currentBalance.toFixed(2)}` }
+      return {
+        success: false,
+        error: `Insufficient balance. Need $${order.totalCost.toFixed(2)}, have $${currentBalance.toFixed(2)}`,
+      }
     }
 
-    const newBalance = order.side === 'buy'
-      ? currentBalance - order.totalCost
-      : currentBalance + order.totalCost
+    // Optimistic update — immediately visible in the UI
+    setOrders(prev => [...prev, order])
 
-    const currentOrders = loadOrders()
-    const newOrders = [...currentOrders, order]
-
-    saveOrders(newOrders)
-    saveBalance(newBalance)
-    setOrders(newOrders)
-    setBalance(newBalance)
+    // Push to Supabase (fire-and-forget; failure is non-blocking)
+    getToken().then(token => {
+      if (!token) return
+      fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          marketId:   order.marketId,
+          strike:     order.strike,
+          type:       order.type,
+          expiry:     order.expiry,
+          side:       order.side,
+          quantity:   order.quantity,
+          limitPrice: order.premium,
+          metadata:   order,   // full PaperOrder for lossless cross-device reconstruction
+        }),
+      }).catch(() => { /* best-effort */ })
+    })
 
     return { success: true }
-  }, [])
+  }, [orders, getToken])
 
+  // ── resetPortfolio: clear React state + delete from Supabase ────────────────
   const resetPortfolio = useCallback(() => {
-    saveOrders([])
-    saveBalance(INITIAL_BALANCE)
     setOrders([])
-    setBalance(INITIAL_BALANCE)
     setMarketPrices(new Map())
-  }, [])
+
+    getToken().then(token => {
+      if (token) deleteAllOrders(token).catch(() => {})
+    })
+  }, [getToken])
 
   const refreshPrices = useCallback((prices: Map<string, MarketSnapshot>) => {
     setMarketPrices(prices)
@@ -108,15 +179,10 @@ export function usePaperTrades(): UsePaperTradesReturn {
 
   const positions = hydrated ? derivePositions(orders, marketPrices) : []
 
-  // Derived: equity curve from order history.
-  // The final "now" point is adjusted to include open position mark-to-market value
-  // so the curve shows true portfolio value (cash + positions), not just cash.
-  // Without this, buying an option causes a visible dip even though portfolio value is unchanged.
   const equityCurve = useMemo(() => {
     if (!hydrated) return []
     const curve = buildEquityCurve(orders)
     if (curve.length > 0 && positions.length > 0) {
-      // Long: add MTM value. Short: subtract buyback cost (premium received is already in balance).
       const positionMtm = positions.reduce((s, p) => {
         const sign = p.side === 'long' ? 1 : -1
         return s + sign * p.currentValue * p.quantity
@@ -131,8 +197,6 @@ export function usePaperTrades(): UsePaperTradesReturn {
     return curve
   }, [hydrated, orders, positions])
 
-
-  // Derived: portfolio stats from positions + orders + balance + prices
   const stats = useMemo(() => {
     if (!hydrated) return EMPTY_STATS
     return computePortfolioStats(positions, orders, balance, marketPrices)

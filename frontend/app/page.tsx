@@ -2,7 +2,6 @@
 
 import { useState, useEffect, lazy, Suspense } from 'react'
 import Link from 'next/link'
-import { TrendingUp, TrendingDown } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import MarketCard, { MarketCardSkeleton } from '@/components/MarketCard'
 import { useMarkets } from '@/hooks/useMarkets'
@@ -47,9 +46,9 @@ function EventGroupCard({ markets }: { markets: AppMarket[] }) {
   const lead = sorted[0]
 
   return (
-    <Link href={`/market/${lead.id}?ps=${encodeURIComponent(lead.slug)}`}>
+    <Link href={`/market/${lead.id}?ps=${encodeURIComponent(lead.slug)}`} className="h-full">
       <div className={cn(
-        'group flex flex-col gap-3 p-4 rounded-lg cursor-pointer animate-fade-in',
+        'group flex flex-col gap-3 p-4 rounded-lg cursor-pointer animate-fade-in h-full',
         'bg-card hover:bg-card-hover border border-border hover:border-zinc-600 transition-colors duration-150'
       )}>
         {/* Header */}
@@ -95,7 +94,7 @@ function EventGroupCard({ markets }: { markets: AppMarket[] }) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs text-muted pt-0.5 border-t border-zinc-800/60">
+        <div className="flex items-center justify-between text-xs text-muted pt-0.5 border-t border-zinc-800/60 mt-auto">
           <span>{fmtUSDC(totalVol)} vol</span>
           <span>{lead.daysToResolution}d left</span>
         </div>
@@ -116,12 +115,11 @@ export default function HomePage() {
   }, [query])
 
   const { markets, loading, error } = useMarkets({
-    limit: 20,
     tag: category || undefined,
     q: debouncedQuery || undefined,
   })
 
-  const groups = groupMarkets(markets)
+  const groups = groupMarkets(markets).slice(0, 20)
 
   function clearSearch() {
     setQuery('')
@@ -223,7 +221,7 @@ export default function HomePage() {
         )}
 
         {/* Markets grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 auto-rows-[220px]">
           {loading
             ? Array.from({ length: 8 }).map((_, i) => <MarketCardSkeleton key={i} />)
             : groups.map(group =>

@@ -4,7 +4,7 @@ const MDS = process.env.MARKET_DATA_SERVICE_URL || 'http://localhost:3001'
 const PRICER = process.env.PRICING_SERVICE_URL || 'http://localhost:8000'
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -17,12 +17,14 @@ export async function GET(
     }
     const market = await mdsRes.json()
 
-    const volRes = await fetch(`${MDS}/markets/${id}/vol`, { next: { revalidate: 60 } })
     let impliedVol = 1.5
-    if (volRes.ok) {
-      const volData = await volRes.json()
-      impliedVol = volData.sigma || 1.5
-    }
+    try {
+      const volRes = await fetch(`${MDS}/markets/${id}/vol`, { next: { revalidate: 60 } })
+      if (volRes.ok) {
+        const volData = await volRes.json()
+        impliedVol = volData.sigma || 1.5
+      }
+    } catch { /* keep default */ }
 
     // 2. Query Python Pricing Service
     const chainReq = {

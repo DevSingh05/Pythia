@@ -14,9 +14,9 @@ export default function MarketCard({ market }: MarketCardProps) {
   const isUp = market.change24h >= 0
 
   return (
-    <Link href={`/market/${market.id}?ps=${encodeURIComponent(market.slug)}`}>
+    <Link href={`/market/${market.id}?ps=${encodeURIComponent(market.slug)}`} className="h-full">
       <div className={cn(
-        'group flex flex-col gap-3 p-4 rounded-lg',
+        'group flex flex-col gap-3 p-4 rounded-lg h-full',
         'bg-card hover:bg-card-hover border border-border hover:border-zinc-600',
         'transition-colors duration-150 cursor-pointer',
         'animate-fade-in'
@@ -64,7 +64,7 @@ export default function MarketCard({ market }: MarketCardProps) {
         </div>
 
         {/* Meta */}
-        <div className="flex items-center justify-between text-xs text-muted pt-0.5">
+        <div className="flex items-center justify-between text-xs text-muted pt-0.5 mt-auto">
           <span>{fmtUSDC(market.volume24h)} vol</span>
           <span>{market.daysToResolution}d left</span>
         </div>
@@ -75,7 +75,7 @@ export default function MarketCard({ market }: MarketCardProps) {
 
 export function MarketCardSkeleton() {
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-lg bg-card border border-border animate-pulse">
+    <div className="flex flex-col gap-3 p-4 rounded-lg bg-card border border-border animate-pulse h-full">
       <div className="flex gap-1.5">
         <div className="h-4 w-14 bg-border rounded" />
         <div className="h-4 w-10 bg-border rounded" />

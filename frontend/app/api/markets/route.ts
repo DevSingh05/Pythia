@@ -14,12 +14,12 @@ const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polym
  * A market matches if ANY of its tags match ANY slug in the category.
  */
 const CATEGORY_TAG_MAP: Record<string, string[]> = {
-  politics:   ['politics', 'elections', 'congress', 'trump', 'democrats', 'republicans', 'biden', 'senate', 'governor', 'presidential'],
-  crypto:     ['crypto', 'bitcoin', 'ethereum', 'defi', 'nft', 'blockchain', 'solana', 'altcoins', 'exchange'],
-  economics:  ['economics', 'economy', 'finance', 'stocks', 'fed', 'inflation', 'gdp', 'interest-rates', 'trade', 'business', 'ipos'],
-  sports:     ['sports', 'nba', 'nfl', 'mlb', 'soccer', 'football', 'basketball', 'baseball', 'tennis', 'mma', 'ufc', 'boxing', 'hockey', 'nhl', 'golf', 'cricket', 'f1', 'racing'],
-  science:    ['science', 'technology', 'tech', 'ai', 'space', 'climate', 'health', 'medicine', 'biotech'],
-  geo:        ['geopolitics', 'war', 'china', 'russia', 'ukraine', 'nato', 'middle-east', 'india', 'europe', 'asia', 'iran', 'israel'],
+  politics:    ['politics', 'elections', 'congress', 'trump', 'democrats', 'republicans', 'biden', 'senate', 'governor', 'presidential'],
+  crypto:      ['crypto', 'bitcoin', 'ethereum', 'defi', 'nft', 'blockchain', 'solana', 'altcoins', 'exchange'],
+  economics:   ['economics', 'economy', 'finance', 'stocks', 'fed', 'inflation', 'gdp', 'interest-rates', 'trade', 'business', 'ipos'],
+  sports:      ['sports', 'nba', 'nfl', 'mlb', 'soccer', 'football', 'basketball', 'baseball', 'tennis', 'mma', 'ufc', 'boxing', 'hockey', 'nhl', 'golf', 'cricket', 'f1', 'racing'],
+  science:     ['science', 'technology', 'tech', 'ai', 'space', 'climate', 'health', 'medicine', 'biotech'],
+  geopolitics: ['geopolitics', 'war', 'china', 'russia', 'ukraine', 'nato', 'middle-east', 'india', 'europe', 'asia', 'iran', 'israel'],
 }
 
 function parsePrice(outcomePrices: any): number {
@@ -32,11 +32,10 @@ function parsePrice(outcomePrices: any): number {
 export async function GET(req: NextRequest) {
   const incoming = req.nextUrl.searchParams
 
-  const tag = incoming.get('tag') ?? ''
-  const q   = incoming.get('q')   ?? ''
+  const q = incoming.get('q') ?? ''
 
-  // Fetch a larger set when filtering — client-side filter reduces results
-  const fetchLimit = tag ? '100' : (incoming.get('limit') ?? '30')
+  // Always fetch a large set — client-side filters and event grouping reduce the final count
+  const fetchLimit = '150'
 
   const params = new URLSearchParams({
     active:    'true',
@@ -60,7 +59,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(events, { status: upstream.status })
   }
 
-  const categoryFilter = incoming.get('tag') ?? ''
+  const categoryFilter = (incoming.get('tag') ?? '').toLowerCase()
   const categoryTags = CATEGORY_TAG_MAP[categoryFilter] ?? []
 
   const MAX_NEGRISK_OUTCOMES = 5
@@ -105,16 +104,6 @@ export async function GET(req: NextRequest) {
     }))
   })
 
-  // Client-side tag filter — Gamma events endpoint doesn't support tag_id
-  if (tag) {
-    const tagLower = tag.toLowerCase()
-    markets = markets.filter((mkt: any) =>
-      mkt.tags?.some((t: any) =>
-        (t.label ?? t.id ?? t).toString().toLowerCase().includes(tagLower)
-      )
-    )
-  }
-
   // Client-side q filter against individual market questions (Gamma q only matches event titles)
   if (q) {
     const qLower = q.toLowerCase()
@@ -123,10 +112,6 @@ export async function GET(req: NextRequest) {
       (mkt.events?.[0]?.title ?? '').toLowerCase().includes(qLower)
     )
   }
-
-  // Trim to requested limit after filtering
-  const limit = parseInt(incoming.get('limit') ?? '20', 10)
-  markets = markets.slice(0, limit)
 
   return NextResponse.json(markets, { status: 200 })
 }
