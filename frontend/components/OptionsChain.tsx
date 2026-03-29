@@ -27,8 +27,17 @@ export default function OptionsChain({
   const [type, setType] = useState<ContractType>('call')
   const [expiry, setExpiry] = useState(chain.expiries?.[1] ?? chain.expiries?.[0] ?? '1W')
 
-  const options = type === 'call' ? chain.calls : chain.puts
   const currentProb = chain.currentProb
+
+  // Deduplicate by (type, strike) in case the backend returns duplicate rows
+  const rawOptions = type === 'call' ? chain.calls : chain.puts
+  const seen = new Set<string>()
+  const options = rawOptions.filter(o => {
+    const k = `${o.type}-${o.strike}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
 
   const itmOptions = options.filter(o => o.isITM).sort((a, b) =>
     type === 'call' ? b.strike - a.strike : a.strike - b.strike
@@ -111,9 +120,9 @@ export default function OptionsChain({
 
       {/* ITM rows */}
       <div className="divide-y divide-border/20">
-        {itmOptions.map(opt => (
+        {itmOptions.map((opt, i) => (
           <OptionRow
-            key={opt.strike}
+            key={`${opt.type}-${opt.strike}-itm-${i}`}
             option={opt}
             currentProb={currentProb}
             onSelect={onSelectOption}
@@ -134,9 +143,9 @@ export default function OptionsChain({
 
       {/* OTM rows */}
       <div className="divide-y divide-border/20">
-        {otmOptions.map(opt => (
+        {otmOptions.map((opt, i) => (
           <OptionRow
-            key={opt.strike}
+            key={`${opt.type}-${opt.strike}-otm-${i}`}
             option={opt}
             currentProb={currentProb}
             onSelect={onSelectOption}

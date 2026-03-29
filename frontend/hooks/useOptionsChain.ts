@@ -49,13 +49,30 @@ export function useOptionsChain(
       } as OptionsChainResponse
     }
 
+    /** Deduplicate a list of options — keep only the first entry per strike. */
+    const dedup = (opts: { strike: number; type: string }[]) => {
+      const seen = new Set<string>()
+      return opts.filter(o => {
+        const k = `${o.type}-${o.strike}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+    }
+
+    const sanitise = (data: OptionsChainResponse): OptionsChainResponse => ({
+      ...data,
+      calls: dedup(data.calls) as typeof data.calls,
+      puts:  dedup(data.puts)  as typeof data.puts,
+    })
+
     if (apiUrl) {
       // Try real backend; silently fall back to client-side if it fails
       fetchOptionsChain(marketId, expiry)
-        .then(data => setState({ data, loading: false, error: null }))
-        .catch(() => setState({ data: computeLocal(), loading: false, error: null }))
+        .then(data => setState({ data: sanitise(data), loading: false, error: null }))
+        .catch(() => setState({ data: sanitise(computeLocal()), loading: false, error: null }))
     } else {
-      setState({ data: computeLocal(), loading: false, error: null })
+      setState({ data: sanitise(computeLocal()), loading: false, error: null })
     }
   }, [marketId, currentProb, impliedVol, expiry, apiUrl])
 

@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
 import PayoffChart from './PayoffChart'
-import { Minus, Plus, AlertCircle } from 'lucide-react'
+import { Minus, Plus, AlertCircle, LogIn } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import AuthModal from './AuthModal'
 
 interface TradePanelProps {
   market: AppMarket
@@ -15,6 +17,8 @@ interface TradePanelProps {
 }
 
 export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {
+  const { user } = useAuth()
+  const [showAuth, setShowAuth] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -72,6 +76,7 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
   }
 
   return (
+    <>
     <div className={cn('rounded-lg bg-card border border-border overflow-hidden', className)}>
       {/* Header */}
       <div className="flex items-center px-3 py-2.5 border-b border-border gap-3">
@@ -186,25 +191,38 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         )}
 
-        {/* Submit */}
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className={cn(
-            'w-full py-2.5 rounded-md text-sm font-medium transition-colors',
-            side === 'buy'
-              ? 'bg-green hover:bg-green/90 text-white'
-              : 'bg-red hover:bg-red/90 text-white',
-            loading && 'opacity-60 cursor-not-allowed'
-          )}
-        >
-          {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity}× ${option.type.toUpperCase()}`}
-        </button>
+        {/* Submit — gated on auth */}
+        {user ? (
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className={cn(
+              'w-full py-2.5 rounded-md text-sm font-medium transition-colors',
+              side === 'buy'
+                ? 'bg-green hover:bg-green/90 text-white'
+                : 'bg-red hover:bg-red/90 text-white',
+              loading && 'opacity-60 cursor-not-allowed'
+            )}
+          >
+            {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity}× ${option.type.toUpperCase()}`}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowAuth(true)}
+            className="w-full py-2.5 rounded-md text-sm font-medium transition-colors bg-accent hover:bg-accent/90 text-white flex items-center justify-center gap-2"
+          >
+            <LogIn className="w-4 h-4" />
+            Log in to place orders
+          </button>
+        )}
 
         <p className="text-[10px] text-muted text-center">
-          Connect wallet to place real orders · European · Cash settled
+          European · Cash settled · Logit-Normal pricing
         </p>
       </div>
     </div>
+
+    {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+    </>
   )
 }
