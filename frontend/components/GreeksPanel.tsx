@@ -46,19 +46,19 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
     {
       symbol: 'Θ',
       name: 'Theta',
-      value: option.theta * 100,  // display in cents
-      unit: '¢/day',
-      tip: 'Premium decay per calendar day in cents. Always negative for long options — you lose this many cents of premium each day.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.3),
+      value: option.theta,
+      unit: 'dV/dτ',
+      tip: 'Rate of time decay — how fast the option loses value as expiry approaches. Always negative for long options. Peaks ATM.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.15),
       positive: false,
     },
     {
       symbol: 'ν',
       name: 'Vega',
-      value: option.vega * 100,  // display in cents
-      unit: '¢/1%σ',
-      tip: 'Cent sensitivity to a 1 percentage-point move in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.8),
+      value: option.vega,
+      unit: 'dV/dσ',
+      tip: 'Sensitivity to changes in implied volatility. Peaks ATM, tapers off for deep ITM/OTM options.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.03),
     },
   ]
 
@@ -137,7 +137,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
           <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500/50 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, option.impliedVol * 67)}%` }}
+              style={{ width: `${Math.min(100, option.impliedVol * 50)}%` }}
             />
           </div>
         </div>

@@ -26,16 +26,6 @@ function fmtG(v: number, decimals: number): string {
   return s
 }
 
-/**
- * Format theta/vega in cents (×100) for readability.
- * Dollar values like -0.0002 become -0.02¢ — non-zero and meaningful.
- */
-function fmtCents(v: number): string {
-  const cents = v * 100
-  const abs = Math.abs(cents)
-  if (abs < 0.005) return '—'
-  return cents.toFixed(2)
-}
 
 function GreekCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -118,8 +108,8 @@ export default function OptionRow({
         <div className="flex items-center justify-center gap-2">
           <GreekCell label="Delta" value={fmtG(option.delta, 3)} color={deltaColor} />
           <GreekCell label="Gamma" value={fmtG(option.gamma, 4)} color="text-blue-400" />
-          <GreekCell label="Θ ¢/day" value={fmtCents(option.theta)} color="text-red-400/80" />
-          <GreekCell label="ν ¢/σ%" value={fmtCents(option.vega)} color="text-violet-400" />
+          <GreekCell label="Theta" value={fmtG(option.theta, 4)} color="text-red-400/80" />
+          <GreekCell label="Vega" value={fmtG(option.vega, 4)} color="text-violet-400" />
         </div>
       )}
 
@@ -168,8 +158,8 @@ export function OptionChainHeader({ showGreeks }: { showGreeks?: boolean }) {
         <div className="flex items-center justify-center gap-2">
           <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Delta</div>
           <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Gamma</div>
-          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Θ ¢/day</div>
-          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">ν ¢/σ%</div>
+          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Theta</div>
+          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Vega</div>
         </div>
       )}
       <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider text-right pr-8">Premium</div>

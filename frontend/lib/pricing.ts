@@ -201,46 +201,48 @@ export function putGamma(p0: number, K: number, sigma: number, tau: number): num
 }
 
 /**
- * Theta: dollar decay per calendar day.
+ * Theta: dV/dτ — standard Black-Scholes theta (time derivative).
  *
- * = V(tau - 1day) - V(tau)   [no division by dt]
+ * This is the RATE of change of option value with respect to time,
+ * not the raw 1-day dollar change. The derivative form produces values
+ * in a natural range (0.01–0.15) rather than dollar-tiny values
+ * that display as zero.
  *
- * DO NOT divide by dt. Dividing by dt=1/365 would annualise the result (×365),
- * returning $/year instead of $/day. The display label says "per day",
- * so return the raw one-day change directly.
+ * Same convention as equity options platforms (Robinhood, TOS, IBKR).
  */
 export function callTheta(p0: number, K: number, sigma: number, tau: number): number {
   const dt = THETA_DT
   const tauMinus = Math.max(dt / 10, tau - dt)
-  return vanillaCall(p0, K, sigma, tauMinus) - vanillaCall(p0, K, sigma, tau)
+  return (vanillaCall(p0, K, sigma, tauMinus) - vanillaCall(p0, K, sigma, tau)) / dt
 }
 
 export function putTheta(p0: number, K: number, sigma: number, tau: number): number {
   const dt = THETA_DT
   const tauMinus = Math.max(dt / 10, tau - dt)
-  return vanillaPut(p0, K, sigma, tauMinus) - vanillaPut(p0, K, sigma, tau)
+  return (vanillaPut(p0, K, sigma, tauMinus) - vanillaPut(p0, K, sigma, tau)) / dt
 }
 
 /**
- * Vega: dollar sensitivity to a 1 percentage-point move in implied vol.
+ * Vega: dV/dσ — standard Black-Scholes vega (vol derivative).
  *
- * Central difference over ±eps=0.01 (1% vol); divide by 2 (not 2*eps).
- * Result = ΔV for a 0.01 (1%) move in sigma — matches "per 1% σ" label.
+ * Central difference gives the derivative with respect to sigma.
+ * This produces values in a natural range (0.001–0.02) rather than
+ * the per-1% dollar change which is 50x smaller.
  *
- * Dividing by 2*eps=0.02 would give dV/dσ per UNIT sigma (per 100% move).
+ * Same convention as equity options platforms.
  */
 export function callVega(p0: number, K: number, sigma: number, tau: number): number {
   const eps = VEGA_BUMP
   const sigUp = sigma + eps
   const sigDn = Math.max(0.01, sigma - eps)
-  return (vanillaCall(p0, K, sigUp, tau) - vanillaCall(p0, K, sigDn, tau)) / 2
+  return (vanillaCall(p0, K, sigUp, tau) - vanillaCall(p0, K, sigDn, tau)) / (sigUp - sigDn)
 }
 
 export function putVega(p0: number, K: number, sigma: number, tau: number): number {
   const eps = VEGA_BUMP
   const sigUp = sigma + eps
   const sigDn = Math.max(0.01, sigma - eps)
-  return (vanillaPut(p0, K, sigUp, tau) - vanillaPut(p0, K, sigDn, tau)) / 2
+  return (vanillaPut(p0, K, sigUp, tau) - vanillaPut(p0, K, sigDn, tau)) / (sigUp - sigDn)
 }
 
 // ── Options chain builder ────────────────────────────────────────────────────
