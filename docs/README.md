@@ -72,7 +72,7 @@ The demo includes a historical replay mode: a real Polymarket market played back
 | Cache | Upstash Redis |
 | Database | Neon (serverless Postgres) |
 
-All market data flows server-side. The browser never calls Polymarket APIs directly.
+All market data flows server-side. The browser never calls Polymarket APIs directly .
 
 ---
 
