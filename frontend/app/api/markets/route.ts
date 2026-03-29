@@ -1,17 +1,33 @@
 /**
  * Server-side proxy using the Gamma EVENTS endpoint.
  *
- * Per Polymarket docs, the events endpoint is the canonical source for
- * discovering markets: events contain embedded markets, and the event.slug
- * is what maps to polymarket.com/event/{slug}.
- *
- * We flatten event.markets[] and inject events[0] (the parent event) onto
- * each market object so toAppMarket can use the correct event slug for links.
+ * Fetches events, flattens markets, filters out resolved/closed/stale entries,
+ * and supports client-side category filtering via tag slug matching.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
 const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polymarket.com'
+
+/**
+ * Map our UI category slugs to Gamma tag slugs.
+ * A market matches if ANY of its tags match ANY slug in the category.
+ */
+const CATEGORY_TAG_MAP: Record<string, string[]> = {
+  politics:   ['politics', 'elections', 'congress', 'trump', 'democrats', 'republicans', 'biden', 'senate', 'governor', 'presidential'],
+  crypto:     ['crypto', 'bitcoin', 'ethereum', 'defi', 'nft', 'blockchain', 'solana', 'altcoins', 'exchange'],
+  economics:  ['economics', 'economy', 'finance', 'stocks', 'fed', 'inflation', 'gdp', 'interest-rates', 'trade', 'business', 'ipos'],
+  sports:     ['sports', 'nba', 'nfl', 'mlb', 'soccer', 'football', 'basketball', 'baseball', 'tennis', 'mma', 'ufc', 'boxing', 'hockey', 'nhl', 'golf', 'cricket', 'f1', 'racing'],
+  science:    ['science', 'technology', 'tech', 'ai', 'space', 'climate', 'health', 'medicine', 'biotech'],
+  geo:        ['geopolitics', 'war', 'china', 'russia', 'ukraine', 'nato', 'middle-east', 'india', 'europe', 'asia', 'iran', 'israel'],
+}
+
+function parsePrice(outcomePrices: any): number {
+  try {
+    const arr = typeof outcomePrices === 'string' ? JSON.parse(outcomePrices) : outcomePrices
+    return parseFloat(arr?.[0] ?? '0.5') || 0.5
+  } catch { return 0.5 }
+}
 
 export async function GET(req: NextRequest) {
   const incoming = req.nextUrl.searchParams
@@ -20,7 +36,7 @@ export async function GET(req: NextRequest) {
   const q   = incoming.get('q')   ?? ''
 
   // Fetch a larger set when filtering — client-side filter reduces results
-  const fetchLimit = tag ? '100' : (incoming.get('limit') ?? '20')
+  const fetchLimit = tag ? '100' : (incoming.get('limit') ?? '30')
 
   const params = new URLSearchParams({
     active:    'true',
@@ -30,7 +46,6 @@ export async function GET(req: NextRequest) {
     limit:     fetchLimit,
     offset:    incoming.get('offset') ?? '0',
   })
-  // q searches event titles on the Gamma events endpoint
   if (q) params.set('q', q)
 
   let upstream: Response
@@ -45,17 +60,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(events, { status: upstream.status })
   }
 
-  // Flatten: for each event, attach event context to every embedded market.
-  // toAppMarket will use events[0].slug (the event slug) for the Polymarket link.
-  //
-  // NegRisk events (e.g. "2026 FIFA World Cup Winner") have 40+ outcome markets
-  // (one per country). Showing all of them floods the list with near-zero-prob
-  // outcomes like "Will Haiti win?". Cap negRisk events to the top 5 by volume.
+  const categoryFilter = incoming.get('tag') ?? ''
+  const categoryTags = CATEGORY_TAG_MAP[categoryFilter] ?? []
+
   const MAX_NEGRISK_OUTCOMES = 5
 
   let markets = events.flatMap((event: any) => {
     const eventCtx = { id: event.id, slug: event.slug, title: event.title }
     let mktList: any[] = event.markets ?? []
+
+    // Skip events where ALL markets are closed/resolved
+    const activeMarkets = mktList.filter((m: any) => !m.closed)
+    if (activeMarkets.length === 0) return []
+
+    // Category filtering: check if event tags match the selected category
+    if (categoryTags.length > 0) {
+      const eventTags = (event.tags ?? []).map((t: any) => (t.slug ?? '').toLowerCase())
+      const matches = categoryTags.some(ct => eventTags.includes(ct))
+      if (!matches) return []
+    }
+
+    // Filter out closed/resolved individual markets
+    mktList = activeMarkets.filter((m: any) => {
+      const prob = parsePrice(m.outcomePrices)
+      if (prob <= 0.001 || prob >= 0.999) return false
+      return true
+    })
+
+    if (mktList.length === 0) return []
 
     if (event.negRisk && mktList.length > MAX_NEGRISK_OUTCOMES) {
       mktList = [...mktList]
@@ -67,9 +99,9 @@ export async function GET(req: NextRequest) {
       ...mkt,
       volume24hr: mkt.volume24hr ?? event.volume24hr ?? 0,
       liquidity:  mkt.liquidityNum ?? mkt.liquidity ?? event.liquidity ?? 0,
-      events:     [eventCtx],
-      // carry event tags so client-side category filter can use them
-      tags:       mkt.tags ?? event.tags ?? [],
+      negRisk: event.negRisk ?? false,
+      events: [eventCtx],
+      tags: mkt.tags ?? event.tags ?? [],
     }))
   })
 

@@ -8,6 +8,7 @@ import OptionRow, { OptionChainHeader } from './OptionRow'
 interface OptionsChainProps {
   chain: OptionsChainResponse
   onSelectOption: (opt: OptionQuote) => void
+  onExpiryChange?: (expiry: string) => void
   selectedOption: OptionQuote | null
   showGreeks?: boolean
   className?: string
@@ -19,13 +20,19 @@ type ContractType = 'call' | 'put'
 export default function OptionsChain({
   chain,
   onSelectOption,
+  onExpiryChange,
   selectedOption,
-  showGreeks = false,
+  showGreeks = true,
   className,
 }: OptionsChainProps) {
   const [side, setSide] = useState<Side>('buy')
   const [type, setType] = useState<ContractType>('call')
   const [expiry, setExpiry] = useState(chain.expiries?.[1] ?? chain.expiries?.[0] ?? '1W')
+
+  function handleExpiryChange(e: string) {
+    setExpiry(e)
+    onExpiryChange?.(e)
+  }
 
   const currentProb = chain.currentProb
 
@@ -93,7 +100,7 @@ export default function OptionsChain({
           {chain.expiries.map(e => (
             <button
               key={e}
-              onClick={() => setExpiry(e)}
+              onClick={() => handleExpiryChange(e)}
               className={cn(
                 'px-2 py-1 text-xs rounded font-mono transition-colors',
                 expiry === e

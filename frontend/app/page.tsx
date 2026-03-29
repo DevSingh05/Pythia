@@ -1,10 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import Navbar from '@/components/Navbar'
 import MarketCard, { MarketCardSkeleton } from '@/components/MarketCard'
 import { useMarkets } from '@/hooks/useMarkets'
-import { cn } from '@/lib/utils'
+import { AppMarket } from '@/lib/api'
+import { cn, fmtProb, fmtUSDC, fmtPP } from '@/lib/utils'
 
 // tag ids match Polymarket tag labels (case-insensitive substring match in proxy)
 const CATEGORIES = [
@@ -16,6 +19,83 @@ const CATEGORIES = [
   { id: 'Science', label: 'Science' },
   { id: 'Geopolitics', label: 'Geopolitics' },
 ]
+
+/** Group markets by event slug. Multi-outcome events → one group. */
+function groupMarkets(markets: AppMarket[]): AppMarket[][] {
+  const seen = new Map<string, AppMarket[]>()
+  for (const m of markets) {
+    const key = m.slug || m.id
+    if (!seen.has(key)) seen.set(key, [])
+    seen.get(key)!.push(m)
+  }
+  return Array.from(seen.values())
+}
+
+/** Card for multi-outcome events (FIFA World Cup, Oscars, etc.) */
+function EventGroupCard({ markets }: { markets: AppMarket[] }) {
+  const eventTitle = markets[0].eventTitle ?? markets[0].slug.replace(/-/g, ' ')
+  const sorted = [...markets].sort((a, b) => b.currentProb - a.currentProb)
+  const top = sorted.slice(0, 5)
+  const totalVol = markets.reduce((s, m) => s + m.volume24h, 0)
+  const lead = sorted[0]
+
+  return (
+    <Link href={`/market/${lead.id}?ps=${encodeURIComponent(lead.slug)}`}>
+      <div className={cn(
+        'group flex flex-col gap-3 p-4 rounded-lg cursor-pointer animate-fade-in',
+        'bg-card hover:bg-card-hover border border-border hover:border-zinc-600 transition-colors duration-150'
+      )}>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium text-zinc-200 group-hover:text-zinc-100 transition-colors leading-snug line-clamp-2 capitalize">
+            {eventTitle}
+          </p>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-500 shrink-0 font-medium uppercase tracking-wide">
+            {markets.length} outcomes
+          </span>
+        </div>
+
+        {/* Outcome rows */}
+        <div className="space-y-1.5">
+          {top.map(m => {
+            const label = m.outcomeLabel ?? m.title.replace(/^Will\s+/i, '').split(' ')[0]
+            const isUp = m.change24h >= 0
+            return (
+              <div key={m.id} className="flex items-center gap-2">
+                <div className="w-24 shrink-0">
+                  <span className="text-xs text-zinc-400 truncate block">{label}</span>
+                </div>
+                <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent/70 rounded-full"
+                    style={{ width: `${Math.round(m.currentProb * 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-xs font-mono tabular-nums text-zinc-200 w-8 text-right">
+                    {fmtProb(m.currentProb)}
+                  </span>
+                  <span className={cn(
+                    'text-[10px] tabular-nums w-10 text-right',
+                    isUp ? 'text-emerald-500' : 'text-red-400'
+                  )}>
+                    {isUp ? '+' : ''}{fmtPP(m.change24h, false)}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between text-xs text-muted pt-0.5 border-t border-zinc-800/60">
+          <span>{fmtUSDC(totalVol)} vol</span>
+          <span>{lead.daysToResolution}d left</span>
+        </div>
+      </div>
+    </Link>
+  )
+}
 
 export default function HomePage() {
   const [query, setQuery] = useState('')
@@ -34,6 +114,8 @@ export default function HomePage() {
     q: debouncedQuery || undefined,
   })
 
+  const groups = groupMarkets(markets)
+
   function clearSearch() {
     setQuery('')
     setDebouncedQuery('')
@@ -50,12 +132,11 @@ export default function HomePage() {
             Options on Prediction Markets
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
-            Trade probability, not outcomes.
+            The derivatives layer for prediction markets.
           </h1>
-          <p className="text-muted-fg text-sm max-w-lg leading-relaxed">
-            Pythia layers options on Polymarket YES% probabilities.
-            Buy calls when you expect a probability to rise, puts when you expect it to fall.
-            Priced with a Logit-Normal model for bounded underlyings.
+          <p className="text-muted-fg text-sm max-w-xl leading-relaxed">
+            Pythia turns every Polymarket probability into a tradeable volatility surface.
+            Structured payoffs, real Greeks, and defined risk — across politics, sports, crypto, and economics.
           </p>
         </div>
       </div>
@@ -90,11 +171,15 @@ export default function HomePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {loading
             ? Array.from({ length: 8 }).map((_, i) => <MarketCardSkeleton key={i} />)
-            : markets.map(market => <MarketCard key={market.id} market={market} />)
+            : groups.map(group =>
+                group.length > 1
+                  ? <EventGroupCard key={group[0].slug} markets={group} />
+                  : <MarketCard key={group[0].id} market={group[0]} />
+              )
           }
         </div>
 
-        {!loading && !error && markets.length === 0 && (
+        {!loading && !error && groups.length === 0 && (
           <div className="text-center py-16">
             <p className="text-muted text-sm">No markets found.</p>
             {query && (
@@ -110,10 +195,10 @@ export default function HomePage() {
           <h2 className="text-sm font-medium text-muted uppercase tracking-widest mb-4">How it works</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             {[
-              { step: '01', title: 'Pick a market', desc: 'Any active Polymarket contract. The YES% is your underlying.' },
-              { step: '02', title: 'Choose direction', desc: 'Call if you expect YES% to rise. Put if you expect it to fall.' },
-              { step: '03', title: 'Set your strike', desc: 'Pick a probability target — 30%, 50%, 70%. Breakeven shown live.' },
-              { step: '04', title: 'View P&L', desc: 'Payoff curve updates in real time. Max win and loss clearly shown.' },
+              { step: '01', title: 'Pick a market', desc: 'Any active Polymarket contract becomes your underlying. The YES% is a live probability price.' },
+              { step: '02', title: 'Choose a strike', desc: 'Pick a probability level — 30%, 50%, 70%. Your option pays off if the market moves through your strike.' },
+              { step: '03', title: 'Review the chain', desc: 'See the full options chain across expiries. IV, Greeks, breakeven all computed in real time.' },
+              { step: '04', title: 'Trade with structure', desc: 'Defined max loss, live P&L curve. Know your risk before you enter.' },
             ].map(({ step, title, desc }) => (
               <div key={step} className="bg-card border border-border rounded-lg p-4 space-y-1.5">
                 <div className="text-xs text-muted tabular-nums">{step}</div>
@@ -121,23 +206,6 @@ export default function HomePage() {
                 <div className="text-xs text-muted leading-relaxed">{desc}</div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Model callout */}
-        <div className="rounded-lg bg-card border border-border p-5 space-y-3">
-          <h3 className="text-sm font-medium text-zinc-200">Logit-Normal Pricing</h3>
-          <p className="text-xs text-muted leading-relaxed max-w-2xl">
-            Black-Scholes assumes unbounded lognormal prices and can't price bounded probabilities.
-            Pythia models{' '}
-            <span className="font-mono text-zinc-300">logit(p) = ln(p / 1−p)</span>, which is
-            unbounded and follows Brownian motion — enabling closed-form pricing with proper Greeks.
-          </p>
-          <div className="font-mono text-xs text-muted bg-surface rounded-md p-3 space-y-1 border border-border">
-            <div><span className="text-zinc-400">L₀</span> = logit(p₀) = ln(p₀ / (1 − p₀))</div>
-            <div><span className="text-zinc-400">L_T</span> ~ N(L₀, σ²τ)  where τ = time to expiry</div>
-            <div><span className="text-zinc-400">p_T</span> = sigmoid(L_T) = 1 / (1 + e^(−L_T))</div>
-            <div><span className="text-zinc-400">C</span>   = Φ((L₀ − logit(K)) / (σ√τ))</div>
           </div>
         </div>
       </div>

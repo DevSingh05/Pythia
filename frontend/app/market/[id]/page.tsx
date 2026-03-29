@@ -1,22 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import ProbabilityGauge from '@/components/ProbabilityGauge'
 import ProbChart from '@/components/ProbChart'
 import OptionsChain, { OptionsChainSkeleton } from '@/components/OptionsChain'
 import TradePanel from '@/components/TradePanel'
 import GreeksPanel from '@/components/GreeksPanel'
-import { useMarket, usePriceHistory } from '@/hooks/useMarkets'
+import { useMarket } from '@/hooks/useMarkets'
 import { useOptionsChain } from '@/hooks/useOptionsChain'
 import { cn, fmtUSDC, fmtProb } from '@/lib/utils'
 import { OptionQuote } from '@/lib/api'
-import { ArrowLeft, ToggleLeft, ToggleRight, Clock, BarChart2, AlertCircle, ExternalLink } from 'lucide-react'
+import {
+  ArrowLeft, Clock, BarChart2, AlertCircle, ExternalLink,
+  TrendingUp, TrendingDown, ChevronRight
+} from 'lucide-react'
 import Link from 'next/link'
 
-type ViewMode = 'simple' | 'pro'
-type TradeSide = 'buy' | 'sell'
+function useSiblingMarkets(eventSlug: string | undefined) {
+  const [siblings, setSiblings] = useState<any[]>([])
+  useEffect(() => {
+    if (!eventSlug) return
+    fetch(`/api/events?slug=${encodeURIComponent(eventSlug)}`)
+      .then(r => r.json())
+      .then(data => setSiblings(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }, [eventSlug])
+  return siblings
+}
+
+function shortLabel(question: string, groupItemTitle?: string): string {
+  if (groupItemTitle) return groupItemTitle
+  const colonIdx = question.lastIndexOf(': ')
+  if (colonIdx !== -1) return question.slice(colonIdx + 2).slice(0, 18)
+  const willMatch = question.match(/^Will (.+?) (?:win|be|get|receive)/i)
+  if (willMatch) return willMatch[1].slice(0, 18)
+  return question.length > 18 ? question.slice(0, 18) + '...' : question
+}
+
+/** Parse clobTokenIds from a sibling market object */
+function parseClobTokenId(sib: any): string {
+  try {
+    const raw = typeof sib.clobTokenIds === 'string'
+      ? JSON.parse(sib.clobTokenIds)
+      : sib.clobTokenIds
+    return raw?.[0] ?? ''
+  } catch { return '' }
+}
+
+function parsePrice(outcomePrices: any): number {
+  try {
+    const arr = typeof outcomePrices === 'string' ? JSON.parse(outcomePrices) : outcomePrices
+    return parseFloat(arr?.[0] ?? '0.5') || 0.5
+  } catch { return 0.5 }
+}
 
 export default function MarketPage() {
   const params = useParams()
@@ -24,16 +61,14 @@ export default function MarketPage() {
   const searchParams = useSearchParams()
   const id = params.id as string
 
-  const [mode, setMode] = useState<ViewMode>('simple')
   const [selectedOption, setSelectedOption] = useState<OptionQuote | null>(null)
-  const [tradeSide, setTradeSide] = useState<TradeSide>('buy')
-  const { market, loading: mktLoading, error: mktError } = useMarket(id)
+  const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy')
+  const [selectedExpiry, setSelectedExpiry] = useState('1W')
 
-  // ps = event slug passed from MarketCard; falls back to market.slug once loaded
+  const { market, loading: mktLoading, error: mktError } = useMarket(id)
   const polySlug = searchParams.get('ps') ?? market?.slug ?? id
-  const { history, loading: histLoading } = usePriceHistory(
-    market?.clobTokenId ?? '',
-  )
+  const siblings = useSiblingMarkets(polySlug)
+
   const {
     data: chain,
     loading: chainLoading,
@@ -42,152 +77,198 @@ export default function MarketPage() {
     id,
     market?.currentProb ?? 0.5,
     (market as any)?.volatility ?? 1.5,
+    market?.clobTokenId,
+    selectedExpiry,
   )
+
+  // Build outcome info for multi-line chart
+  const chartOutcomes = useMemo(() => {
+    if (siblings.length <= 1) return undefined
+    return siblings
+      .filter((s: any) => !s.closed)
+      .sort((a: any, b: any) => parsePrice(b.outcomePrices) - parsePrice(a.outcomePrices))
+      .slice(0, 6)
+      .map((sib: any) => ({
+        label: shortLabel(sib.question ?? '', sib.groupItemTitle),
+        tokenId: parseClobTokenId(sib),
+        prob: parsePrice(sib.outcomePrices),
+        marketId: sib.id ?? sib.conditionId ?? sib.condition_id,
+      }))
+      .filter(o => o.tokenId) // only include outcomes with valid token IDs
+  }, [siblings])
+
+  const changePositive = (market?.change24h ?? 0) >= 0
+
+  // Find event-level metadata
+  const eventTitle = siblings.length > 1
+    ? (siblings[0] as any)?.events?.[0]?.title
+      ?? market?.eventTitle
+      ?? polySlug.replace(/-\d+$/, '').replace(/-/g, ' ')
+    : null
+  const totalVolume = siblings.length > 1
+    ? siblings.reduce((s: number, m: any) => s + (parseFloat(m.volume24hr ?? m.volume ?? '0') || 0), 0)
+    : 0
 
   if (mktError) {
     return (
-      <div className="min-h-screen bg-bg">
+      <div className="min-h-screen bg-zinc-950">
         <Navbar />
         <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-red mx-auto" />
-          <p className="text-red">{mktError}</p>
-          <Link href="/" className="text-accent text-sm hover:underline">← Back to markets</Link>
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
+          <p className="text-red-400">{mktError}</p>
+          <Link href="/" className="text-blue-400 text-sm hover:underline">Back to markets</Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen bg-zinc-950">
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
+
         {/* Breadcrumb */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 text-sm">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-muted hover:text-slate-200 text-sm transition-colors"
+            className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-200 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Markets
           </button>
-          <span className="text-border">/</span>
           {market && (
-            <span className="text-sm text-muted-fg truncate max-w-xs">{market.title}</span>
+            <>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-700" />
+              <span className="text-zinc-400 truncate max-w-xs text-xs">{market.title}</span>
+            </>
           )}
         </div>
 
         {/* Market header */}
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left: market info */}
-          <div className="flex-1 space-y-4">
-            {mktLoading ? (
-              <div className="space-y-3 animate-pulse">
-                <div className="h-4 w-32 bg-border rounded" />
-                <div className="h-7 w-full bg-border rounded" />
-                <div className="h-5 w-3/4 bg-border rounded" />
-              </div>
-            ) : market && (
-              <>
-                {/* Tags */}
-                <div className="flex flex-wrap gap-1.5">
-                  {market.tags.map(tag => (
-                    <span key={tag} className="text-xs px-2 py-0.5 rounded-full bg-card border border-border text-muted-fg">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                <h1 className="text-xl font-semibold leading-snug">{market.title}</h1>
-
-                {/* Key stats */}
-                <div className="flex flex-wrap gap-4 text-xs text-muted">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Resolves {market.resolutionDate} · {market.daysToResolution}d left</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <BarChart2 className="w-3.5 h-3.5" />
-                    <span>Vol 24h: {fmtUSDC(market.volume24h)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span>Liquidity: {fmtUSDC(market.liquidity)}</span>
-                  </div>
-                  <a
-                    href={`https://polymarket.com/event/${polySlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-accent hover:underline"
-                  >
-                    Polymarket <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                {/* Prob chart */}
-                <ProbChart
-                  history={history}
-                  currentProb={market.currentProb}
-                  loading={histLoading}
-                />
-              </>
-            )}
+        {mktLoading ? (
+          <div className="space-y-3 animate-pulse">
+            <div className="h-3 w-24 bg-zinc-800 rounded" />
+            <div className="h-6 w-3/4 bg-zinc-800 rounded" />
+            <div className="h-3 w-1/2 bg-zinc-800 rounded" />
           </div>
+        ) : market && (
+          <div className="space-y-3">
+            {/* Tags */}
+            <div className="flex flex-wrap gap-1.5">
+              {market.tags.slice(0, 4).map(tag => (
+                <span key={tag} className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/50 text-zinc-400">
+                  {tag}
+                </span>
+              ))}
+            </div>
 
-          {/* Right: gauge + mode toggle */}
-          <div className="lg:w-72 space-y-4">
-            {mktLoading ? (
-              <div className="h-64 bg-card rounded-xl border border-border animate-pulse" />
-            ) : market && (
-              <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-                <ProbabilityGauge
-                  probability={market.currentProb}
-                  change24h={market.change24h}
-                  size="lg"
-                  animated
-                />
-
-                {/* Mode toggle */}
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <span className={cn('text-xs', mode === 'simple' ? 'text-accent' : 'text-muted')}>Simple</span>
-                  <button
-                    onClick={() => setMode(m => m === 'simple' ? 'pro' : 'simple')}
-                    className="text-muted hover:text-accent transition-colors"
-                  >
-                    {mode === 'simple'
-                      ? <ToggleLeft className="w-8 h-8" />
-                      : <ToggleRight className="w-8 h-8 text-accent" />
-                    }
-                  </button>
-                  <span className={cn('text-xs', mode === 'pro' ? 'text-accent' : 'text-muted')}>Pro</span>
-                </div>
-
-                {mode === 'pro' && (
-                  <div className="text-xs text-center text-muted bg-surface rounded-lg py-1.5">
-                    Full options chain · Live Greeks · Vol surface
-                  </div>
+            {/* Title + prob badge */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                {eventTitle && (
+                  <p className="text-xs text-zinc-500 mb-1 capitalize">{eventTitle}</p>
                 )}
+                <h1 className="text-lg font-semibold text-zinc-100 leading-snug max-w-3xl">
+                  {market.outcomeLabel ?? market.title}
+                </h1>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Main content: Options chain + Trade panel */}
-        <div className={cn(
-          'grid gap-6',
-          mode === 'simple' ? 'grid-cols-1 lg:grid-cols-[1fr_360px]' : 'grid-cols-1 lg:grid-cols-[1fr_360px]'
-        )}>
-          {/* Options chain */}
-          <div className="space-y-4">
-            {chainError && (
-              <div className="bg-red/10 border border-red/20 rounded-xl p-4 text-sm text-red flex gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  Could not load options chain: {chainError}
-                  <div className="text-xs text-muted mt-1">
-                    Set NEXT_PUBLIC_API_URL to connect the Pythia pricing backend.
-                    Client-side computation requires market data to be available.
-                  </div>
+              <div className="flex items-baseline gap-2 shrink-0">
+                <span className="text-3xl font-bold font-mono text-zinc-100 tabular-nums">
+                  {fmtProb(market.currentProb, 1)}
+                </span>
+                <div className={cn(
+                  'flex items-center gap-0.5 text-sm font-mono',
+                  changePositive ? 'text-emerald-400' : 'text-red-400'
+                )}>
+                  {changePositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                  {changePositive ? '+' : ''}{(market.change24h * 100).toFixed(1)}pp
                 </div>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                Resolves {market.resolutionDate} · {market.daysToResolution}d left
+              </span>
+              <span className="flex items-center gap-1.5">
+                <BarChart2 className="w-3.5 h-3.5" />
+                Vol 24h: {fmtUSDC(totalVolume || market.volume24h)}
+              </span>
+              <span>Liquidity: {fmtUSDC(market.liquidity)}</span>
+              <a
+                href={`https://polymarket.com/event/${polySlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-blue-400/70 hover:text-blue-400 transition-colors"
+              >
+                Polymarket <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Sibling market tabs */}
+        {siblings.length > 1 && (
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mr-1 shrink-0">Outcomes:</span>
+            {[...siblings]
+              .sort((a: any, b: any) => parsePrice(b.outcomePrices) - parsePrice(a.outcomePrices))
+              .slice(0, 12)
+              .map((sib: any) => {
+              const sibId = sib.id ?? sib.conditionId ?? sib.condition_id
+              const isActive = sibId === id
+              const label = shortLabel(sib.question ?? '', sib.groupItemTitle)
+              const sibProb = parsePrice(sib.outcomePrices)
+              return (
+                <Link
+                  key={sibId}
+                  href={`/market/${sibId}?ps=${encodeURIComponent(polySlug)}`}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border shrink-0',
+                    isActive
+                      ? 'bg-blue-500/15 border-blue-500/40 text-blue-300'
+                      : 'bg-zinc-800/60 border-zinc-700/50 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600'
+                  )}
+                >
+                  <span>{label}</span>
+                  <span className={cn(
+                    'font-mono tabular-nums text-[10px]',
+                    isActive ? 'text-blue-400' : 'text-zinc-500'
+                  )}>
+                    {(sibProb * 100).toFixed(0)}%
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Probability chart — full width above the two-column layout */}
+        {mktLoading ? (
+          <div className="h-72 bg-zinc-900/50 rounded-xl border border-zinc-800 animate-pulse" />
+        ) : market && (
+          <div className="bg-zinc-900/30 rounded-xl border border-zinc-800 p-4">
+            <ProbChart
+              tokenId={market.clobTokenId}
+              currentProb={market.currentProb}
+              outcomes={chartOutcomes}
+              activeMarketId={id}
+            />
+          </div>
+        )}
+
+        {/* Main two-column layout: chain + trade panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
+
+          {/* Left column: options chain */}
+          <div className="space-y-5">
+            {chainError && (
+              <div className="bg-red-500/8 border border-red-500/20 rounded-xl p-4 text-sm text-red-400 flex gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>Could not load options chain: {chainError}</div>
               </div>
             )}
 
@@ -196,63 +277,19 @@ export default function MarketPage() {
             ) : (
               <OptionsChain
                 chain={chain}
-                onSelectOption={opt => setSelectedOption(opt)}
+                onSelectOption={opt => {
+                  setSelectedOption(opt)
+                  setTradeSide('buy')
+                }}
+                onExpiryChange={setSelectedExpiry}
                 selectedOption={selectedOption}
-                showGreeks={mode === 'pro'}
+                showGreeks={true}
               />
-            )}
-
-            {/* Pro mode extras */}
-            {mode === 'pro' && chain && (
-              <div className="grid grid-cols-2 gap-4">
-                {/* IV vs HV */}
-                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Volatility</h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted">Implied Vol</span>
-                      <span className="font-mono text-accent">{(chain.impliedVol * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1 bg-border rounded-full overflow-hidden">
-                      <div className="h-full bg-accent/60 rounded-full" style={{ width: `${Math.min(100, chain.impliedVol * 50)}%` }} />
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted">Historical Vol</span>
-                      <span className="font-mono text-muted-fg">{(chain.historicalVol * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="h-1 bg-border rounded-full overflow-hidden">
-                      <div className="h-full bg-muted/40 rounded-full" style={{ width: `${Math.min(100, chain.historicalVol * 50)}%` }} />
-                    </div>
-                    <div className="text-muted/70 pt-1 leading-relaxed">
-                      {chain.impliedVol > chain.historicalVol
-                        ? 'IV > HV: market pricing in elevated uncertainty. Options relatively expensive.'
-                        : 'IV < HV: options may be underpriced relative to realized vol.'
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                {/* Model info */}
-                <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-                  <h3 className="text-sm font-semibold">Model Info</h3>
-                  <div className="space-y-1.5 text-xs font-mono text-muted">
-                    <div>Model: <span className="text-accent">Logit-Normal</span></div>
-                    <div>Style: <span className="text-slate-200">European</span></div>
-                    <div>Settlement: <span className="text-slate-200">Cash (YES%)</span></div>
-                    <div>σ(logit): <span className="text-accent">{chain.impliedVol.toFixed(3)}</span></div>
-                    <div className="text-muted/60 leading-relaxed pt-1">
-                      dL = σ dW<br />
-                      L = ln(p/1-p)<br />
-                      C = Φ(d), d = (L₀-logit(K))/(σ√τ)
-                    </div>
-                  </div>
-                </div>
-              </div>
             )}
           </div>
 
-          {/* Right panel: Trade + Greeks */}
-          <div className="space-y-4">
+          {/* Right column: trade panel + Greeks */}
+          <div className="lg:sticky lg:top-16 lg:self-start space-y-4">
             {market && (
               <TradePanel
                 market={market}
@@ -261,50 +298,14 @@ export default function MarketPage() {
                 onSideChange={setTradeSide}
               />
             )}
-
-            {mode === 'pro' && selectedOption && (
+            {selectedOption && market && (
               <GreeksPanel
                 option={selectedOption}
-                currentProb={market?.currentProb ?? 0.5}
+                currentProb={market.currentProb}
               />
             )}
           </div>
         </div>
-
-        {/* TradFi translation table (educational) */}
-        {mode === 'simple' && (
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <div className="text-xs text-accent font-mono">HOW IT MAPS TO TRADFI</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left text-muted pb-2 font-medium pr-6">Concept</th>
-                    <th className="text-left text-muted pb-2 font-medium pr-6">Traditional Options</th>
-                    <th className="text-left text-muted pb-2 font-medium text-accent">Pythia</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {[
-                    ['Underlying', '$AAPL stock price', `YES probability (${market ? fmtProb(market.currentProb) : '??'})`],
-                    ['Strike', '$180 price target', '50% probability target'],
-                    ['Premium', '$ paid for contract', '$ paid for prob option'],
-                    ['Expiry', 'Options expiry date', 'Date before market resolves'],
-                    ['In The Money', 'Price above strike', 'Probability above strike'],
-                    ['Theta', 'Time decay of premium', 'Decay as event nears & gets binary'],
-                    ['Vega', 'Sensitivity to vol', 'Sensitivity to news / sentiment vol'],
-                  ].map(([concept, tradfi, pythia]) => (
-                    <tr key={concept}>
-                      <td className="py-2 pr-6 text-muted-fg">{concept}</td>
-                      <td className="py-2 pr-6 text-muted font-mono">{tradfi}</td>
-                      <td className="py-2 text-accent font-mono">{pythia}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

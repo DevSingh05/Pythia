@@ -68,50 +68,95 @@ export function vanillaPut(p0: number, K: number, sigma: number, tau: number): n
   return Math.max(0, vanillaCall(p0, K, sigma, tau) - (p0 - K))
 }
 
+/** Clamp p to avoid logit singularities */
+function clampP(p: number): number {
+  return Math.max(0.001, Math.min(0.999, p))
+}
+
 /**
- * Delta: sensitivity of call premium to 1pp move in p0
- * Δ = φ(d) / (σ√τ · p₀(1-p₀))
+ * Delta (call): bump-and-reprice central difference on vanillaCall
+ * Δ ∈ [0, 1] for calls
  */
 export function callDelta(p0: number, K: number, sigma: number, tau: number): number {
-  const sigTau = sigma * Math.sqrt(tau)
-  const d = (logit(p0) - logit(K)) / sigTau
-  return phi(d) / (sigTau * p0 * (1 - p0))
-}
-
-export function putDelta(p0: number, K: number, sigma: number, tau: number): number {
-  return -callDelta(p0, K, sigma, tau)
+  const eps = 0.001
+  const pUp = clampP(p0 + eps)
+  const pDn = clampP(p0 - eps)
+  return (vanillaCall(pUp, K, sigma, tau) - vanillaCall(pDn, K, sigma, tau)) / (pUp - pDn)
 }
 
 /**
- * Gamma: second-order sensitivity
- * Approximate numerically
+ * Delta (put): bump-and-reprice central difference on vanillaPut
+ * Δ ∈ [-1, 0] for puts
+ */
+export function putDelta(p0: number, K: number, sigma: number, tau: number): number {
+  const eps = 0.001
+  const pUp = clampP(p0 + eps)
+  const pDn = clampP(p0 - eps)
+  return (vanillaPut(pUp, K, sigma, tau) - vanillaPut(pDn, K, sigma, tau)) / (pUp - pDn)
+}
+
+/**
+ * Gamma: d²V/dL² — second derivative of option value with respect to
+ * logit-space moves (L = logit(p), the natural unbounded coordinate).
+ *
+ * Computing d²V/dp² directly gives enormous values (30+) near boundary
+ * probabilities because the logit Jacobian dL/dp = 1/(p(1-p)) amplifies
+ * curvature. By working entirely in logit space, Gamma stays bounded
+ * and interpretable (typically 0.00 to ~0.10).
+ *
+ * Interpretation: "How much option value accelerates per unit² logit move."
+ * Analogous to standard BS Gamma (d²V/dS²) where S = logit price.
  */
 export function gamma(p0: number, K: number, sigma: number, tau: number): number {
-  const eps = 0.01
-  const d1 = callDelta(Math.min(0.99, p0 + eps), K, sigma, tau)
-  const d0 = callDelta(Math.max(0.01, p0 - eps), K, sigma, tau)
-  return (d1 - d0) / (2 * eps)
+  const L0 = logit(p0)
+  const eps = 0.05  // logit-space bump (wider for stable second derivative)
+  const pUp = sigmoid(L0 + eps)
+  const pMid = p0
+  const pDn = sigmoid(L0 - eps)
+  const vUp = vanillaCall(pUp, K, sigma, tau)
+  const vMid = vanillaCall(pMid, K, sigma, tau)
+  const vDn = vanillaCall(pDn, K, sigma, tau)
+  return (vUp - 2 * vMid + vDn) / (eps * eps)
 }
 
 /**
- * Theta: time decay per day
- * Θ = −φ(d) · d / (2τ)
+ * Theta (call): time decay per day via bump-and-reprice
+ * Θ = [V(τ − dt) − V(τ)] / dt  where dt = 1/365
  */
 export function callTheta(p0: number, K: number, sigma: number, tau: number): number {
-  const sigTau = sigma * Math.sqrt(tau)
-  const d = (logit(p0) - logit(K)) / sigTau
-  return (-phi(d) * d) / (2 * tau) / 365 // per day
+  const dt = 1 / 365
+  const tauBumped = Math.max(dt / 10, tau - dt) // avoid tau ≤ 0
+  return (vanillaCall(p0, K, sigma, tauBumped) - vanillaCall(p0, K, sigma, tau)) / dt
 }
 
 /**
- * Vega: sensitivity to volatility
- * ν = −φ(d) · d / σ
- * (flips sign at strike — negative ITM, positive OTM)
+ * Theta (put): time decay per day via bump-and-reprice
+ */
+export function putTheta(p0: number, K: number, sigma: number, tau: number): number {
+  const dt = 1 / 365
+  const tauBumped = Math.max(dt / 10, tau - dt)
+  return (vanillaPut(p0, K, sigma, tauBumped) - vanillaPut(p0, K, sigma, tau)) / dt
+}
+
+/**
+ * Vega (call): sensitivity to volatility via central difference
+ * ν = [V(σ+ε) − V(σ−ε)] / (2ε)
  */
 export function callVega(p0: number, K: number, sigma: number, tau: number): number {
-  const sigTau = sigma * Math.sqrt(tau)
-  const d = (logit(p0) - logit(K)) / sigTau
-  return (-phi(d) * d) / sigma
+  const eps = 0.01
+  const sigUp = sigma + eps
+  const sigDn = Math.max(0.01, sigma - eps)
+  return (vanillaCall(p0, K, sigUp, tau) - vanillaCall(p0, K, sigDn, tau)) / (sigUp - sigDn)
+}
+
+/**
+ * Vega (put): sensitivity to volatility via central difference
+ */
+export function putVega(p0: number, K: number, sigma: number, tau: number): number {
+  const eps = 0.01
+  const sigUp = sigma + eps
+  const sigDn = Math.max(0.01, sigma - eps)
+  return (vanillaPut(p0, K, sigUp, tau) - vanillaPut(p0, K, sigDn, tau)) / (sigUp - sigDn)
 }
 
 export interface OptionData {
@@ -139,12 +184,53 @@ const EXPIRIES = [
   { label: '1M', days: 30 },
 ]
 
+// Fine strike grid — same philosophy as the Python backend's STRIKE_GRID
+const STRIKE_GRID = [
+  0.03, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25,
+  0.28, 0.30, 0.33, 0.35, 0.38, 0.40, 0.42, 0.45, 0.48, 0.50,
+  0.52, 0.55, 0.58, 0.60, 0.62, 0.65, 0.68, 0.70, 0.72, 0.75,
+  0.78, 0.80, 0.82, 0.85, 0.88, 0.90, 0.92, 0.95, 0.97,
+]
+
+/**
+ * Dynamic strike selection: only include strikes within nStd logit-space
+ * standard deviations from the current probability.
+ * Mirrors Python backend available_strikes() logic.
+ * Guarantees at least 4 strikes around ATM even in low/high probability markets.
+ */
+export function availableStrikes(
+  currentProb: number,
+  sigma: number,
+  tauDays: number,
+  nStd = 2.5,
+): number[] {
+  const tau = tauDays / 365
+  const L0 = logit(currentProb)
+  const sigTau = sigma * Math.sqrt(tau)
+  const Llo = L0 - nStd * sigTau
+  const Lhi = L0 + nStd * sigTau
+
+  const filtered = STRIKE_GRID.filter(K => {
+    const LK = logit(K)
+    return LK >= Llo && LK <= Lhi
+  })
+
+  // Always guarantee at least 4 strikes
+  if (filtered.length >= 4) return filtered
+
+  // Fall back: find closest strikes in logit space
+  const sorted = [...STRIKE_GRID].sort((a, b) => Math.abs(logit(a) - L0) - Math.abs(logit(b) - L0))
+  return [...new Set([...filtered, ...sorted.slice(0, 6)])].sort((a, b) => a - b)
+}
+
 export function buildOptionsChain(
   currentProb: number,
   sigma: number,
   expiry: { label: string; days: number } = EXPIRIES[1],
-  strikes: number[] = [0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]
+  strikes?: number[],
 ): { calls: OptionData[]; puts: OptionData[]; expiries: typeof EXPIRIES } {
+  // If no explicit strikes, compute dynamically based on current prob + vol
+  const useStrikes = strikes ?? availableStrikes(currentProb, sigma, expiry.days)
   const tau = expiry.days / 365
 
   // Seeded random for deterministic-looking daily changes
@@ -153,7 +239,7 @@ export function buildOptionsChain(
     return x - Math.floor(x)
   }
 
-  const calls: OptionData[] = strikes.map((K, i) => {
+  const calls: OptionData[] = useStrikes.map((K, i) => {
     const premium = vanillaCall(currentProb, K, sigma, tau)
     const rng = seed(K * 100 + i)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
@@ -179,7 +265,7 @@ export function buildOptionsChain(
     }
   })
 
-  const puts: OptionData[] = strikes.map((K, i) => {
+  const puts: OptionData[] = useStrikes.map((K, i) => {
     const premium = vanillaPut(currentProb, K, sigma, tau)
     const rng = seed(K * 200 + i * 3)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
@@ -196,8 +282,8 @@ export function buildOptionsChain(
       premiumChangePct: prevPremium > 0 ? change / prevPremium : 0,
       delta: putDelta(currentProb, K, sigma, tau),
       gamma: gamma(currentProb, K, sigma, tau),
-      theta: callTheta(currentProb, K, sigma, tau),
-      vega: callVega(currentProb, K, sigma, tau),
+      theta: putTheta(currentProb, K, sigma, tau),
+      vega: putVega(currentProb, K, sigma, tau),
       breakeven,
       breakevenDelta: currentProb - breakeven,
       isITM: currentProb < K,
