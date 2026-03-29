@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER:     pythia
+      POSTGRES_PASSWORD: pythia
+      POSTGRES_DB:       pythia
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save ""   # no persistence in dev
+
+  pricing:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  market-data:
+    build: ./backend/market-data-service
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      PORT:         3001
+      DATABASE_URL: postgresql://pythia:pythia@postgres:5432/pythia
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      PRICING_SERVICE_URL:     http://pricing:8000
+      MARKET_DATA_SERVICE_URL: http://market-data:3001
+    depends_on:
+      - pricing
+      - market-data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

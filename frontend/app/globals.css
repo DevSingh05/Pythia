@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:          #09090b;
+  --surface:     #111113;
+  --card:        #18181b;
+  --card-hover:  #1c1c1f;
+  --border:      #27272a;
+  --accent:      #3b82f6;
+  --green:       #16a34a;
+  --red:         #dc2626;
+  --text:        #f4f4f5;
+  --muted:       #71717a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background-color: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Probability bar fill animation */
+@keyframes fill-bar {
+  from { width: 0%; }
+}
+.animate-fill {
+  animation: fill-bar 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Number flash on update */
+@keyframes flash-green {
+  0% { color: var(--green); }
+  100% { color: inherit; }
+}
+@keyframes flash-red {
+  0% { color: var(--red); }
+  100% { color: inherit; }
+}
+.flash-up { animation: flash-green 0.5s ease-out; }
+.flash-down { animation: flash-red 0.5s ease-out; }
+
+/* ITM row — subtle blue tint */
+.row-itm {
+  background: rgba(59, 130, 246, 0.03);
+  border-left: 2px solid rgba(59, 130, 246, 0.2);
+}
+.row-atm {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+/* Smooth number transitions */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sphere hero fade-in */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+}

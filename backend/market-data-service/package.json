@@ -1,0 +1,17 @@
+{
+  "name": "pythia-market-data",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev":   "bun run --hot --env-file=../../.env src/index.ts",
+    "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir=dist --target=bun"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}
