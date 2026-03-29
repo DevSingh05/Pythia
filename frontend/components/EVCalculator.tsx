@@ -118,7 +118,7 @@ function EVRow({ ev }: { ev: PositionEV }) {
   const { position, evPerContract, evTotal, breakevenProb, currentProb } = ev
   const isPositive = evTotal > 0
   const shortTitle = position.marketTitle.length > 38
-    ? position.marketTitle.slice(0, 36) + 'ΓÇª'
+    ? `${position.marketTitle.slice(0, 36)}…`
     : position.marketTitle
 
   return (
@@ -134,7 +134,7 @@ function EVRow({ ev }: { ev: PositionEV }) {
             ? 'bg-green-muted text-green'
             : 'bg-red-muted text-red'
         )}>
-          {isPositive ? '+ Positive EV' : 'ΓêÆ Negative EV'}
+          {isPositive ? '+ Positive EV' : '\u2212 Negative EV'}
         </span>
       </div>
 
@@ -182,8 +182,8 @@ function EVRow({ ev }: { ev: PositionEV }) {
             {breakevenProb !== null && (
               <span className={cn('text-[9px] ml-1', currentProb > breakevenProb ? 'text-green' : 'text-red')}>
                 {currentProb > breakevenProb
-                  ? `Γû▓ ${((currentProb - breakevenProb) * 100).toFixed(1)}pp above`
-                  : `Γû╝ ${((breakevenProb - currentProb) * 100).toFixed(1)}pp below`
+                  ? `\u25B2 ${((currentProb - breakevenProb) * 100).toFixed(1)}pp above`
+                  : `\u25BC ${((breakevenProb - currentProb) * 100).toFixed(1)}pp below`
                 }
               </span>
             )}

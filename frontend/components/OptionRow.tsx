@@ -1,5 +1,6 @@
 'use client'
 
+import type { KeyboardEvent } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote } from '@/lib/api'
 
@@ -7,6 +8,8 @@ interface OptionRowProps {
   option: OptionQuote
   currentProb: number
   onSelect: (opt: OptionQuote) => void
+  /** Row + only — starts paper demo / simulated book; does not run on full-row click. */
+  onAddToPaperDemo?: (opt: OptionQuote) => void
   selected?: boolean
   showGreeks?: boolean
   liquidityScore?: number   // 0–1, drives left border heat stripe
@@ -27,6 +30,7 @@ export default function OptionRow({
   option,
   currentProb,
   onSelect,
+  onAddToPaperDemo,
   selected,
   showGreeks,
   liquidityScore = 0,
@@ -57,13 +61,24 @@ export default function OptionRow({
   const heatAlpha = liquidityScore * 0.55
   const heatColor = `rgba(16,185,129,${heatAlpha})`
 
+  const handleRowKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onSelect(option)
+    }
+  }
+
   return (
-    <button
-      onClick={() => onSelect(option)}
+    <div
+      tabIndex={0}
       data-demo-strike={option.strike}
+      aria-label={`Select ${option.type} ${fmtProb(option.strike)}`}
+      onClick={() => onSelect(option)}
+      onKeyDown={handleRowKeyDown}
       className={cn(
-        'w-full text-left grid items-center px-3 py-3 transition-all duration-150 relative overflow-hidden',
+        'w-full text-left grid items-center px-3 py-3 transition-all duration-150 relative overflow-hidden cursor-pointer',
         'border-b border-zinc-800/40 last:border-0',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
         showGreeks
           ? 'grid-cols-[72px_80px_1fr_80px]'
           : 'grid-cols-[72px_80px_1fr_80px]',
@@ -82,7 +97,11 @@ export default function OptionRow({
       {isDemoSelecting && (
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ animation: 'liquidityShimmer 1.2s ease-in-out infinite' }}
+          style={{
+            background: 'linear-gradient(105deg, transparent 35%, rgba(168,85,247,0.14) 50%, transparent 65%)',
+            backgroundSize: '220% 100%',
+            animation: 'liquidityShimmer 1.4s ease-in-out infinite',
+          }}
         />
       )}
       {/* Strike + moneyness */}
@@ -119,7 +138,7 @@ export default function OptionRow({
         </div>
       )}
 
-      {/* Premium + change */}
+      {/* Premium + add (demo) — + does not select row */}
       <div className="text-right flex items-center justify-end gap-2">
         <div>
           <div className={cn(
@@ -135,18 +154,32 @@ export default function OptionRow({
             {changeUp ? '+' : ''}{(option.premiumChangePct * 100).toFixed(1)}%
           </div>
         </div>
-        <div className={cn(
-          'w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors shrink-0',
-          selected
-            ? 'bg-accent text-white'
-            : isCall
-              ? 'border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/15'
-              : 'border border-red-500/40 text-red-400 hover:bg-red-500/15'
-        )}>
-          +
-        </div>
+        {onAddToPaperDemo ? (
+          <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation()
+                onAddToPaperDemo(option)
+              }}
+              aria-label="Add to paper order book"
+              className={cn(
+                'w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold transition-colors shrink-0',
+                selected
+                  ? 'bg-accent text-white'
+                  : isCall
+                    ? 'border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/15'
+                    : 'border border-red-500/40 text-red-400 hover:bg-red-500/15'
+              )}
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <div className="w-6 h-6 shrink-0" aria-hidden />
+        )}
       </div>
-    </button>
+    </div>
   )
 }
 

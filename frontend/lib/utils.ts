@@ -11,11 +11,11 @@ export function fmtProb(p: number, decimals = 0): string {
 
 export function fmtPremium(p: number): string {
   if (!Number.isFinite(p) || p < 0) return '$0.000'
-  // Sub-$0.01: show fractional cents so deep OTM does not look "free" (0.00¢)
+  // Sub-$0.01: extra decimals so deep OTM does not look "free" ($0.000)
   if (p < 0.01) {
-    const cents = p * 100
-    if (cents > 0 && cents < 0.01) return '<0.01¢'
-    return `${cents.toFixed(cents < 0.1 ? 3 : 2)}¢`
+    if (p > 0 && p < 0.0001) return '<$0.0001'
+    const decimals = p < 0.001 ? 5 : 4
+    return `$${p.toFixed(decimals)}`
   }
   return `$${p.toFixed(3)}`
 }

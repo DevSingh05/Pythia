@@ -12,11 +12,13 @@ interface PayoffChartProps {
   className?: string
 }
 
+/** Signed USDC (same scale as premium / payoff P&L). */
 export function fmtCents(v: number) {
   const abs = Math.abs(v)
   const sign = v >= 0 ? '+' : '-'
+  if (!Number.isFinite(abs) || abs === 0) return `${sign}$0.00`
   if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`
-  return `${sign}${(abs * 100).toFixed(1)}¢`
+  return `${sign}$${abs.toFixed(4)}`
 }
 
 export function computePayoffMetrics(option: OptionQuote, side: 'buy' | 'sell', quantity: number) {

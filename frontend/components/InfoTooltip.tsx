@@ -1,19 +1,12 @@
-﻿'use client'
+'use client'
 
 /**
- * InfoTooltip
- * ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
- * Reusable hover tooltip for explaining financial parameters in plain English.
- * Renders a small Γôÿ icon; hovering shows a floating explanation card.
- *
- * Extraction: drop this file anywhere ΓÇö zero dependencies beyond React + Tailwind.
- *
- * Usage:
- *   <InfoTooltip explanation="How much your portfolio value changes per 1pp move." />
- *   <InfoTooltip label="Net Delta" explanation="..." side="right" />
+ * Hover tooltip for short explanations (plain English).
+ * Uses a small icon (Lucide) so we never rely on special Unicode that can mojibake in some editors.
  */
 
 import { useState, useRef } from 'react'
+import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface InfoTooltipProps {
@@ -55,21 +48,16 @@ export default function InfoTooltip({
 
   return (
     <span
-      className={cn('relative inline-flex items-center cursor-help', className)}
+      className={cn('relative inline-flex items-center gap-0.5 cursor-help', className)}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}
       onBlur={hide}
+      role="button"
+      tabIndex={0}
+      aria-label="More information"
     >
-      {/* Γôÿ icon */}
-      <span
-        className="text-[10px] text-muted/50 hover:text-muted transition-colors select-none leading-none"
-        aria-label="More information"
-        role="button"
-        tabIndex={0}
-      >
-        Γôÿ
-      </span>
+      <Info className="w-3 h-3 text-muted/50 hover:text-muted transition-colors shrink-0" aria-hidden />
 
       {/* Floating card */}
       {visible && (

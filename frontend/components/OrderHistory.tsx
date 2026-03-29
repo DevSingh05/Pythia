@@ -96,7 +96,7 @@ export default function OrderHistory({ orders, marketPrices }: OrderHistoryProps
               </th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">Total</th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">
-                <span className="flex items-center gap-0.5">P&amp;L <InfoTooltip explanation="Estimated gain or loss on this specific order leg. Calculated by repricing the option at current market conditions vs. your fill price." side="bottom" /></span>
+                <span className="flex items-center gap-0.5">{'P&L'} <InfoTooltip explanation="Estimated gain or loss on this specific order leg. Calculated by repricing the option at current market conditions vs. your fill price." side="bottom" /></span>
               </th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">
                 <span className="flex items-center gap-0.5">IV <InfoTooltip explanation="Implied Volatility used to price this option at fill time. Higher IV means the market was pricing in more uncertainty." side="bottom" /></span>

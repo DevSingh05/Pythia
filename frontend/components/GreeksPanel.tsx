@@ -40,7 +40,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       positive: option.type === 'call' ? true : undefined,
     },
     {
-      symbol: 'Γ',
+      symbol: '\u0393',
       name: 'Gamma',
       value: option.gamma,
       unit: 'ΔΔ/pp',

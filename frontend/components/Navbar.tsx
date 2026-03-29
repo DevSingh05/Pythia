@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, type ChangeEvent } from 'react'
+import { useState, useEffect, Suspense, type ChangeEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, LogOut, Briefcase, Menu, X } from 'lucide-react'
@@ -13,7 +13,22 @@ interface NavbarProps {
   onSearch?: (q: string) => void
 }
 
-export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
+function NavbarFallback() {
+  return (
+    <header
+      className="sticky top-0 z-50 h-16"
+      style={{
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(9,9,11,0.75)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
+      aria-hidden
+    />
+  )
+}
+
+function NavbarInner({ searchQuery = '', onSearch }: NavbarProps) {
   const { user, loading, signOut } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -339,5 +354,13 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
     </>
+  )
+}
+
+export default function Navbar(props: NavbarProps) {
+  return (
+    <Suspense fallback={<NavbarFallback />}>
+      <NavbarInner {...props} />
+    </Suspense>
   )
 }

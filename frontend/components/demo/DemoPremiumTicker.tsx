@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { tickPremium } from '@/lib/demoSimulation'
+import { fmtPremium } from '@/lib/utils'
 import type { DemoStep } from '@/hooks/useDemoMode'
 
 interface DemoPremiumTickerProps {
@@ -44,7 +45,8 @@ export default function DemoPremiumTicker({ demoStep }: DemoPremiumTickerProps) 
   if (displayPremium === null || !option) return null
 
   const up = prevPremium !== null ? displayPremium >= prevPremium : true
-  const pctChange = option.premiumChangePct ?? 0
+  const pctFrac = option.premiumChangePct ?? 0
+  const pctDisplay = pctFrac * 100
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -64,15 +66,15 @@ export default function DemoPremiumTicker({ demoStep }: DemoPremiumTickerProps) 
             letterSpacing: '-0.02em',
           }}
         >
-          {displayPremium.toFixed(4)}
+          {fmtPremium(displayPremium)}
         </span>
         <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>USDC</span>
       </div>
 
       {/* 24h change */}
       <div style={{ display: 'flex', gap: 8, fontSize: '11px' }}>
-        <span style={{ color: pctChange >= 0 ? 'rgba(16,185,129,0.8)' : 'rgba(239,68,68,0.8)' }}>
-          {pctChange >= 0 ? '+' : ''}{pctChange.toFixed(1)}%
+        <span style={{ color: pctDisplay >= 0 ? 'rgba(16,185,129,0.8)' : 'rgba(239,68,68,0.8)' }}>
+          {pctDisplay >= 0 ? '+' : ''}{pctDisplay.toFixed(1)}%
         </span>
         <span style={{ color: 'rgba(255,255,255,0.25)' }}>24h</span>
       </div>
@@ -86,7 +88,7 @@ export default function DemoPremiumTicker({ demoStep }: DemoPremiumTickerProps) 
               height: 6,
               borderRadius: '50%',
               background: 'rgb(245,158,11)',
-              animation: 'pulse 0.8s ease-in-out infinite',
+              animation: 'demo-pulse-dot 0.8s ease-in-out infinite',
             }}
           />
           <span style={{ fontSize: '10px', color: 'rgba(245,158,11,0.8)', letterSpacing: '0.06em' }}>

@@ -10,14 +10,18 @@ interface OptionsChainProps {
   chain: OptionsChainResponse
   /** Controlled expiry (must match parent + `fetchOptionsChain` ?expiry=). */
   selectedExpiry: string
+  /** Select strike for trade panel / charts only — does not start the paper demo. */
   onSelectOption: (opt: OptionQuote) => void
+  /** Row + control: queue paper demo / simulated order book. */
+  onAddToPaperDemo?: (opt: OptionQuote) => void
   onExpiryChange?: (expiry: string) => void
   selectedOption: OptionQuote | null
   showGreeks?: boolean
   className?: string
   // Demo mode
   isDemoMode?: boolean
-  demoHighlightStrike?: number  // strike of the option being demo'd
+  /** Option currently playing in the demo (row highlight / pulse). */
+  demoOption?: OptionQuote | null
   demoPhase?: string
 }
 
@@ -27,15 +31,21 @@ export default function OptionsChain({
   chain,
   selectedExpiry,
   onSelectOption,
+  onAddToPaperDemo,
   onExpiryChange,
   selectedOption,
   showGreeks = true,
   className,
   isDemoMode = false,
-  demoHighlightStrike,
+  demoOption,
   demoPhase,
 }: OptionsChainProps) {
   const [type, setType] = useState<ContractType>('call')
+
+  useEffect(() => {
+    if (isDemoMode && demoOption) setType(demoOption.type)
+    else if (!isDemoMode && selectedOption) setType(selectedOption.type)
+  }, [isDemoMode, demoOption?.type, demoOption?.strike, selectedOption?.type, selectedOption?.strike])
   const [dataAgeMs, setDataAgeMs] = useState(0)
 
   // Track how stale the price data is — refreshes every second
@@ -161,11 +171,12 @@ export default function OptionsChain({
             option={opt}
             currentProb={currentProb}
             onSelect={onSelectOption}
+            onAddToPaperDemo={onAddToPaperDemo}
             selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
             showGreeks={showGreeks}
             liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
-            isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
-            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
+            isDemoHighlighted={isDemoMode && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
+            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
           />
         ))}
       </div>
@@ -191,11 +202,12 @@ export default function OptionsChain({
           option={opt}
           currentProb={currentProb}
           onSelect={onSelectOption}
+          onAddToPaperDemo={onAddToPaperDemo}
           selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
           showGreeks={showGreeks}
           liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
-          isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
-          isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
+          isDemoHighlighted={isDemoMode && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
+          isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
         />
       ))}
 
@@ -207,11 +219,12 @@ export default function OptionsChain({
             option={opt}
             currentProb={currentProb}
             onSelect={onSelectOption}
+            onAddToPaperDemo={onAddToPaperDemo}
             selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
             showGreeks={showGreeks}
             liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
-            isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
-            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
+            isDemoHighlighted={isDemoMode && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
+            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoOption != null && demoOption.strike === opt.strike && demoOption.type === opt.type}
           />
         ))}
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { generateOrderBook, tickOrderBook, type OrderBook } from '@/lib/demoSimulation'
+import { fmtPremium } from '@/lib/utils'
 import type { DemoStep } from '@/hooks/useDemoMode'
 
 interface DemoOrderBookProps {
@@ -100,7 +101,7 @@ export default function DemoOrderBook({ demoStep }: DemoOrderBookProps) {
                   }}
                 />
                 <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', gap: 6 }}>
-                  <span style={{ color: 'rgba(16,185,129,0.9)' }}>{bid?.price.toFixed(3)}</span>
+                  <span style={{ color: 'rgba(16,185,129,0.9)' }}>{fmtPremium(bid?.price ?? 0)}</span>
                   <span style={{ color: 'rgba(255,255,255,0.45)' }}>{bid?.size}</span>
                 </div>
               </div>
@@ -158,9 +159,9 @@ export default function DemoOrderBook({ demoStep }: DemoOrderBookProps) {
         }}
       >
         <span>spread</span>
-        <span style={{ color: 'rgba(255,255,255,0.55)' }}>{book.spread.toFixed(3)}</span>
+        <span style={{ color: 'rgba(255,255,255,0.55)' }}>{fmtPremium(book.spread)}</span>
         <span style={{ marginLeft: 8 }}>mid</span>
-        <span style={{ color: 'rgba(255,255,255,0.55)' }}>{book.midpoint.toFixed(3)}</span>
+        <span style={{ color: 'rgba(255,255,255,0.55)' }}>{fmtPremium(book.midpoint)}</span>
       </div>
     </div>
   )
