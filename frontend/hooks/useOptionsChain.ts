@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { fetchOptionsChain, OptionsChainResponse } from '@/lib/api'
-import { buildOptionsChain, EXPIRY_OPTIONS } from '@/lib/pricing'
+import { fetchOptionsChain, fetchPriceHistory, OptionsChainResponse } from '@/lib/api'
+import { buildOptionsChain, computeHistoricalVol, EXPIRY_OPTIONS } from '@/lib/pricing'
 
 interface UseOptionsChainState {
   data: OptionsChainResponse | null
@@ -12,12 +12,20 @@ interface UseOptionsChainState {
 
 /**
  * Fetches the options chain from the Pythia pricing backend.
- * Falls back to client-side computation if no backend is configured.
+ * Falls back to client-side computation (logit-normal, dynamic strikes) if unavailable.
+ *
+ * Quant notes:
+ *  - Strikes are selected dynamically via availableStrikes() — logit-space distance
+ *    from current prob, so low/high prob markets get appropriate strike grids
+ *  - IV defaults to 1.5 logit-space annual vol (≈ moderate uncertainty);
+ *    if price history is available, we compute HV and use it as the IV estimate
+ *  - Greeks use exact logit-jacobian for Δ, bump-and-reprice for Γ
  */
 export function useOptionsChain(
   marketId: string,
   currentProb: number,
   impliedVol: number,
+  clobTokenId?: string,
   expiry: string = '1W'
 ) {
   const [state, setState] = useState<UseOptionsChainState>({
@@ -32,32 +40,51 @@ export function useOptionsChain(
     if (!marketId) return
     setState(s => ({ ...s, loading: true, error: null }))
 
-    const computeLocal = () => {
+    async function compute() {
+      // Estimate vol from price history if we have a token ID
+      let sigma = impliedVol || 1.5
+      if (clobTokenId) {
+        try {
+          const hist = await fetchPriceHistory(clobTokenId, '30d')
+          if (hist && hist.length >= 10) {
+            const hv = computeHistoricalVol(hist)
+            if (!isNaN(hv) && hv > 0) {
+              // Use HV as IV estimate, clamped to [0.2, 5.0]
+              sigma = Math.min(5.0, Math.max(0.2, hv))
+            }
+          }
+        } catch {
+          // keep default sigma
+        }
+      }
+
       const expiryOpt = EXPIRY_OPTIONS.find(e => e.label === expiry) ?? EXPIRY_OPTIONS[1]
-      const sigma = impliedVol || 1.5
-      const strikes = [0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]
-      const chain = buildOptionsChain(currentProb, sigma, expiryOpt, strikes)
+      const chain = buildOptionsChain(currentProb, sigma, expiryOpt)
       return {
         marketId,
         currentProb,
         impliedVol: sigma,
-        historicalVol: sigma * 0.9,
+        historicalVol: sigma,
         expiries: EXPIRY_OPTIONS.map(e => e.label),
-        calls: chain.calls.map(c => ({ ...c, impliedVol: sigma, type: 'call' as const, expiry })),
-        puts: chain.puts.map(p => ({ ...p, impliedVol: sigma, type: 'put' as const, expiry })),
+        calls: chain.calls.map(c => ({ ...c, impliedVol: sigma, type: 'call' as const, expiry: expiryOpt.label })),
+        puts: chain.puts.map(p => ({ ...p, impliedVol: sigma, type: 'put' as const, expiry: expiryOpt.label })),
         updatedAt: new Date().toISOString(),
       } as OptionsChainResponse
     }
 
     if (apiUrl) {
-      // Try real backend; silently fall back to client-side if it fails
       fetchOptionsChain(marketId, expiry)
         .then(data => setState({ data, loading: false, error: null }))
-        .catch(() => setState({ data: computeLocal(), loading: false, error: null }))
+        .catch(async () => {
+          const data = await compute()
+          setState({ data, loading: false, error: null })
+        })
     } else {
-      setState({ data: computeLocal(), loading: false, error: null })
+      compute()
+        .then(data => setState({ data, loading: false, error: null }))
+        .catch(() => setState({ data: null, loading: false, error: 'Failed to build options chain' }))
     }
-  }, [marketId, currentProb, impliedVol, expiry, apiUrl])
+  }, [marketId, currentProb, impliedVol, clobTokenId, expiry, apiUrl])
 
   return state
 }

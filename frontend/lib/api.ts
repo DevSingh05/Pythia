@@ -73,6 +73,10 @@ export interface AppMarket {
   tags: string[]
   active: boolean
   closed: boolean
+  // Event-level metadata (populated for multi-outcome / negRisk markets)
+  eventTitle?: string     // e.g. "2026 FIFA World Cup Winner"
+  outcomeLabel?: string   // e.g. "Spain" (groupItemTitle from Gamma)
+  negRisk?: boolean       // true = this is one outcome of a multi-outcome event
 }
 
 export interface PricePoint {
@@ -129,6 +133,9 @@ function toAppMarket(m: PolymarketMarket): AppMarket {
     tags: m.tags?.map(t => t.label) ?? [],
     active: m.active,
     closed: m.closed,
+    eventTitle: m.events?.[0]?.title,
+    outcomeLabel: m.groupItemTitle,
+    negRisk: m.negRisk ?? false,
   }
 }
 
@@ -148,7 +155,7 @@ export async function fetchMarkets(params?: {
     if (params?.q) qs.set('q', params.q)
     const res = await apiFetch<any>(`${API_BASE}/markets?${qs}`)
     const arr = Array.isArray(res) ? res : (res?.markets || [])
-    
+
     // If the response came directly from Gamma (user configured backend to Gamma), use toAppMarket.
     // Gamma uses `conditionId` (camelCase) while the Pythia backend uses `condition_id` (snake_case).
     if (arr.length > 0 && arr[0].conditionId && !arr[0].condition_id) {
@@ -225,30 +232,64 @@ export async function fetchMarket(id: string): Promise<AppMarket> {
 
 
 /** Fetch probability history for a market (CLOB time-series).
- *  @param tokenId  The YES CLOB token_id (market.clobTokenId) required by Gamma /prices-history.
- *                  Passing condition_id silently returns empty history.
- *  @param marketId The integer market ID, only used when routing through a custom backend.
+ *  Stitches daily (full lifetime) + hourly (recent detail) for complete coverage.
+ *
+ *  CLOB caps at ~500 buckets per request, so:
+ *    fidelity=1440 (daily)  → ~500 days = full market lifetime
+ *    fidelity=60   (hourly) → ~500 hours = ~21 days recent detail
+ *
+ *  We stitch: daily points for the old range + hourly for the recent range.
  */
 export async function fetchPriceHistory(
   tokenId: string,
-  _interval?: string,   // ignored — we always fetch max so client-side filters work
+  _interval?: string,
   _marketId?: string,
 ): Promise<PricePoint[]> {
   if (!tokenId) return []
-  // Fetch both daily history (for full lifetime) and hourly history (for noisy recent volatility)
   const [resDaily, resHourly] = await Promise.all([
     apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`).catch(() => null),
     apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=60`).catch(() => null)
   ])
-  
+
   const daily = (resDaily?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
   const hourly = (resHourly?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
-  
+
   if (hourly.length === 0) return daily
   if (daily.length === 0) return hourly
-  
+
   const oldestHourly = hourly[0].t
   // Stitch: all daily points older than the first hourly point, plus all hourly points
+  return [...daily.filter(pt => pt.t < oldestHourly), ...hourly]
+}
+
+/**
+ * Fetch stitched price history for chart display.
+ * Combines daily (full lifetime, ~272 pts) + hourly (recent ~21 days, ~500 pts)
+ * to get both the full range AND recent detail — matching Polymarket's chart.
+ *
+ * Single request version available via `lite` flag for vol estimation.
+ */
+export async function fetchPriceHistoryFast(tokenId: string): Promise<PricePoint[]> {
+  if (!tokenId) return []
+
+  // Fetch daily (full lifetime) + hourly (recent detail) in parallel
+  const [resDaily, resHourly] = await Promise.all([
+    apiFetch<{ history: { t: number; p: number }[] }>(
+      `/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`
+    ).catch(() => null),
+    apiFetch<{ history: { t: number; p: number }[] }>(
+      `/api/prices-history?market=${tokenId}&interval=max&fidelity=60`
+    ).catch(() => null),
+  ])
+
+  const daily = (resDaily?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
+  const hourly = (resHourly?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
+
+  if (hourly.length === 0) return daily
+  if (daily.length === 0) return hourly
+
+  // Stitch: daily points for the old range + hourly for the recent range
+  const oldestHourly = hourly[0].t
   return [...daily.filter(pt => pt.t < oldestHourly), ...hourly]
 }
 
