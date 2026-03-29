@@ -11,7 +11,7 @@ import {
   callDelta,
   putDelta,
   callTheta,
-  gamma as calcGamma,
+  callGamma as calcGamma,
   callVega,
 } from '@/lib/pricing'
 

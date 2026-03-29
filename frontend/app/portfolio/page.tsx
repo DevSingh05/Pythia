@@ -11,7 +11,7 @@ import ScenarioAnalysis from '@/components/ScenarioAnalysis'
 import PnlBreakdown from '@/components/PnlBreakdown'
 import EVCalculator from '@/components/EVCalculator'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
-import { fetchMarket, fetchVolatility, fetchAmericanPrice, Position } from '@/lib/api'
+import { fetchMarket, fetchOptionsChain, fetchAmericanPrice, Position } from '@/lib/api'
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, RotateCcw, Wallet, Briefcase } from 'lucide-react'
@@ -33,13 +33,13 @@ export default function PortfolioPage() {
 
     await Promise.allSettled(
       uniqueMarketIds.map(async (id) => {
-        const [market, vol] = await Promise.allSettled([
+        const [market, chain] = await Promise.allSettled([
           fetchMarket(id),
-          fetchVolatility(id),
+          fetchOptionsChain(id),
         ])
 
         const currentProb = market.status === 'fulfilled' ? market.value.currentProb : undefined
-        const impliedVol  = vol.status === 'fulfilled' ? (vol.value as any).sigma : undefined
+        const impliedVol  = chain.status === 'fulfilled' ? chain.value.impliedVol : undefined
 
         if (currentProb === undefined) return
 
