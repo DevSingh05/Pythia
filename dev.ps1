@@ -17,7 +17,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "
   cd '$root\backend\market-data-service';
   bun install --silent
-  bun run --hot --env-file='$root\.env' src/index.ts
+  bun run --hot --env-file=$root\.env src/index.ts
 "
 
 # ── 3. Frontend (Next.js on :3000) ────────────────────────────────────────────
