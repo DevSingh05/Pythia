@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
 import PayoffChart from './PayoffChart'
-import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
+import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown, Loader2, CheckCircle2, RotateCcw } from 'lucide-react'
 import { StarButton } from './ui/star-button'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
@@ -23,7 +23,7 @@ interface TradePanelProps {
   demoMode?: UseDemoModeReturn
 }
 
-export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {
+export default function TradePanel({ market, option, side, onSideChange, className, demoMode }: TradePanelProps) {
   const { user, getToken } = useAuth()
   const { addOrder } = usePaperTrades()
   const [showAuth, setShowAuth] = useState(false)
@@ -32,6 +32,72 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
   const [loading, setLoading] = useState(false)
   const [orderError, setOrderError] = useState<string | null>(null)
 
+  const demoStep = demoMode?.step
+  const demoPhase = demoStep?.phase ?? 'idle'
+  const isDemoActive = demoMode?.isActive ?? false
+
+  // ── Demo: success screen ──────────────────────────────────────────────────
+  if (isDemoActive && demoPhase === 'success' && demoStep?.pnlScenario && demoStep.option) {
+    const { pnlScenario, option: demoOpt, quantity: demoQty } = demoStep
+    return (
+      <div className={cn(
+        'rounded-xl border border-emerald-500/30 bg-zinc-900/40 p-5 flex flex-col gap-4',
+        className
+      )}>
+        {/* Title */}
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-emerald-400">Order Filled</p>
+            <p className="text-[11px] text-zinc-500 font-mono">
+              {demoQty}× {fmtProb(demoOpt.strike)} {demoOpt.type.toUpperCase()} · {demoOpt.expiry}
+            </p>
+          </div>
+        </div>
+
+        {/* Key P&L stats */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-emerald-500/8 border border-emerald-500/20 p-3 space-y-1">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">+5pp move (est.)</p>
+            <p className={cn('text-base font-mono font-bold', pnlScenario.gain5pp >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+              {pnlScenario.gain5pp >= 0 ? '+' : ''}{fmtPremium(pnlScenario.gain5pp)}
+            </p>
+          </div>
+          <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-3 space-y-1">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Max gain</p>
+            <p className="text-base font-mono font-bold text-emerald-400">
+              +{fmtPremium(pnlScenario.maxGain)}
+            </p>
+          </div>
+        </div>
+
+        {/* Max loss / breakeven */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <span className="text-zinc-500">Max loss</span>
+            <span className="font-mono text-red-400">{fmtPremium(pnlScenario.maxLoss)}</span>
+          </div>
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <span className="text-zinc-500">Breakeven</span>
+            <span className="font-mono text-blue-400">{fmtProb(pnlScenario.breakeven, 1)}</span>
+          </div>
+        </div>
+
+        {/* Reset */}
+        <button
+          onClick={() => demoMode?.reset()}
+          className="flex items-center justify-center gap-2 w-full text-xs text-zinc-400 hover:text-zinc-200 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Try another trade
+        </button>
+      </div>
+    )
+  }
+
+  // ── No option selected ────────────────────────────────────────────────────
   if (!option) {
     return (
       <div className={cn(
@@ -117,6 +183,10 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
     )
   }
 
+  // ── Normal (and demo filling/processing) panel ────────────────────────────
+  const isProcessing = isDemoActive && demoPhase === 'processing'
+  const isFilling = isDemoActive && demoPhase === 'filling'
+
   return (
     <>
     <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/30 overflow-hidden', className)}>
@@ -164,17 +234,24 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           currentProb={market.currentProb}
         />
 
-        {/* Premium + breakeven */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Premium / contract</div>
-            <div className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</div>
+        {/* Demo filling: replace static boxes with live order book + premium ticker */}
+        {isFilling && demoStep ? (
+          <div className="grid grid-cols-2 gap-2 items-start">
+            <DemoPremiumTicker demoStep={demoStep} />
+            <DemoOrderBook demoStep={demoStep} />
           </div>
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Breakeven YES%</div>
-            <div className="text-sm font-mono font-semibold text-blue-400">{fmtProb(option.breakeven, 1)}</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-zinc-800/50 rounded-lg p-3">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Premium / contract</div>
+              <div className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</div>
+            </div>
+            <div className="bg-zinc-800/50 rounded-lg p-3">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Breakeven YES%</div>
+              <div className="text-sm font-mono font-semibold text-blue-400">{fmtProb(option.breakeven, 1)}</div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Quantity + total */}
         <div className="flex items-center justify-between bg-zinc-800/40 rounded-lg px-3 py-2.5">
@@ -215,16 +292,21 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         )}
 
-        {/* Submit — gated on auth */}
+        {/* Submit */}
         {user ? (
           <StarButton
             variant={side === 'buy' ? 'buy' : 'sell'}
             size="lg"
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || isProcessing}
             className="w-full justify-center"
           >
-            {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`}
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing…
+              </>
+            ) : loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`}
           </StarButton>
         ) : (
           <StarButton

@@ -11,6 +11,7 @@ import { useMarket } from '@/hooks/useMarkets'
 import { useOptionsChain } from '@/hooks/useOptionsChain'
 import { cn, fmtUSDC, fmtProb } from '@/lib/utils'
 import { OptionQuote } from '@/lib/api'
+import { useDemoMode } from '@/hooks/useDemoMode'
 import {
   ArrowLeft, Clock, BarChart2, AlertCircle, ExternalLink,
   TrendingUp, TrendingDown, ChevronRight
@@ -64,6 +65,9 @@ export default function MarketPage() {
   const [selectedOption, setSelectedOption] = useState<OptionQuote | null>(null)
   const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy')
   const [selectedExpiry, setSelectedExpiry] = useState('1W')
+
+  const demo = useDemoMode()
+
 
   const { market, loading: mktLoading, error: mktError } = useMarket(id)
   const polySlug = searchParams.get('ps') ?? market?.slug ?? id
@@ -280,10 +284,14 @@ export default function MarketPage() {
                 onSelectOption={opt => {
                   setSelectedOption(opt)
                   setTradeSide('buy')
+                  demo.startDemo(opt)
                 }}
                 onExpiryChange={setSelectedExpiry}
                 selectedOption={selectedOption}
                 showGreeks={true}
+                isDemoMode={demo.isActive}
+                demoHighlightStrike={demo.step.option?.strike}
+                demoPhase={demo.step.phase}
               />
             )}
           </div>
@@ -296,6 +304,7 @@ export default function MarketPage() {
                 option={selectedOption}
                 side={tradeSide}
                 onSideChange={setTradeSide}
+                demoMode={demo}
               />
             )}
             {selectedOption && market && (
