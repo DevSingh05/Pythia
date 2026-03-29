@@ -12,13 +12,13 @@ export function useAuth() {
   useEffect(() => {
     const supabase = createClient()
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       setSession(data.session ?? null)
       setUser(data.session?.user ?? null)
       setLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: string, s: Session | null) => {
       setSession(s ?? null)
       setUser(s?.user ?? null)
     })
