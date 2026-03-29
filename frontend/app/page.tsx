@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import Link from 'next/link'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import Navbar from '@/components/Navbar'
@@ -8,6 +8,13 @@ import MarketCard, { MarketCardSkeleton } from '@/components/MarketCard'
 import { useMarkets } from '@/hooks/useMarkets'
 import { AppMarket } from '@/lib/api'
 import { cn, fmtProb, fmtUSDC, fmtPP } from '@/lib/utils'
+
+const ProbSphere = lazy(() =>
+  import('@/components/ui/prob-sphere').then(m => ({ default: m.ProbSphere }))
+)
+const OracleBackground = lazy(() =>
+  import('@/components/ui/oracle-background').then(m => ({ default: m.OracleBackground }))
+)
 
 // tag ids match Polymarket tag labels (case-insensitive substring match in proxy)
 const CATEGORIES = [
@@ -125,19 +132,67 @@ export default function HomePage() {
     <div className="min-h-screen bg-bg">
       <Navbar searchQuery={query} onSearch={setQuery} />
 
-      {/* Hero */}
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 py-10 space-y-3">
-          <p className="text-xs text-muted font-medium uppercase tracking-widest">
-            Options on Prediction Markets
+      {/* Hero — full viewport, sphere centered and prominent */}
+      <div className="relative overflow-hidden border-b border-border" style={{ height: 'calc(100vh - 52px)' }}>
+
+        {/* Greek letter field — oracle chamber inscriptions */}
+        <Suspense fallback={null}>
+          <OracleBackground />
+        </Suspense>
+
+        {/* Sphere — fills and centers itself via absolute inset */}
+        <Suspense fallback={null}>
+          <ProbSphere />
+        </Suspense>
+
+        {/* Dark corners vignette — keeps orb glow in focus */}
+        <div
+          className="absolute inset-0 pointer-events-none z-10"
+          style={{ background: 'radial-gradient(ellipse 55% 55% at 50% 46%, transparent 40%, rgba(9,9,11,0.8) 75%, #09090b 100%)' }}
+        />
+
+        {/* Bottom fade */}
+        <div className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-10 bg-gradient-to-t from-[#09090b] to-transparent" />
+
+        {/* Oracle title — centered over sphere */}
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 animate-fade-in-up">
+          {/* Eyebrow */}
+          <p
+            className="text-[10px] tracking-[0.45em] uppercase"
+            style={{ color: '#c084fc', opacity: 0.8, fontFamily: 'Inter, sans-serif' }}
+          >
+            The Oracle of Prediction Markets
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
-            The derivatives layer for prediction markets.
+
+          {/* Main wordmark */}
+          <h1
+            className="text-7xl md:text-9xl font-black text-white"
+            style={{
+              fontFamily: 'Orbitron, system-ui, sans-serif',
+              letterSpacing: '0.08em',
+              textShadow: '0 0 40px rgba(168,85,247,0.8), 0 0 80px rgba(139,92,246,0.45), 0 0 140px rgba(109,40,217,0.25)',
+            }}
+          >
+            PYTHIA
           </h1>
-          <p className="text-muted-fg text-sm max-w-xl leading-relaxed">
-            Pythia turns every Polymarket probability into a tradeable volatility surface.
-            Structured payoffs, real Greeks, and defined risk — across politics, sports, crypto, and economics.
+
+          {/* Tagline */}
+          <p
+            className="text-sm tracking-wide text-center max-w-xs leading-relaxed mt-1"
+            style={{ color: 'rgba(192,132,252,0.6)', fontFamily: 'Inter, sans-serif' }}
+          >
+            The future is already priced in.<br />Trade the probability, not the outcome.
           </p>
+        </div>
+
+        {/* Scroll cue */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5 animate-pulse-slow">
+          <span className="text-[10px] tracking-[0.25em] uppercase" style={{ color: 'rgba(192,132,252,0.5)' }}>
+            Explore markets
+          </span>
+          <svg className="w-4 h-4" style={{ color: 'rgba(192,132,252,0.5)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
       </div>
 
