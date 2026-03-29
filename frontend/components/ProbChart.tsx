@@ -105,12 +105,15 @@ export default function ProbChart({ history, currentProb, loading, className }: 
               minTickGap={40}
             />
             <YAxis
-              domain={[0, 1]}
-              tickFormatter={v => `${(v * 100).toFixed(0)}%`}
+              domain={[
+                (dataMin: number) => Math.max(0, dataMin - 0.05),
+                (dataMax: number) => Math.min(1, dataMax + 0.05)
+              ]}
+              tickFormatter={v => `${Number((v * 100).toFixed(1))}%`}
               tick={{ fill: '#64748b', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
-              ticks={[0, 0.25, 0.5, 0.75, 1]}
+              tickCount={5}
             />
             <Tooltip content={<CustomTooltip />} />
             <ReferenceLine y={0.5} stroke="#2a2a3d" strokeDasharray="4 4" />

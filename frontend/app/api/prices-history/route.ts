@@ -1,44 +1,27 @@
 /**
- * Server-side proxy for Polymarket price history.
+ * Server-side proxy for Polymarket CLOB price history.
  *
- * Gamma prices-history has LONG history going back to when the event was
- * first created (months of data). The CLOB endpoint only has data from
- * when the specific binary token started trading (typically shorter).
+ * Data source: clob.polymarket.com/prices-history
+ * Gamma API returns 404 for this endpoint with modern token IDs — CLOB is authoritative.
  *
- * Strategy: try Gamma first for full history; fall back to CLOB if Gamma
- * returns non-200 or empty data.
+ * We request fidelity=1440 (daily buckets). CLOB caps at 500 points, so:
+ *   500 days × 1440 min = ~16 months of history — covers full market lifetime.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const GAMMA = 'https://gamma-api.polymarket.com'
-const CLOB  = 'https://clob.polymarket.com'
+const CLOB = 'https://clob.polymarket.com'
 
 export async function GET(req: NextRequest) {
   const qs = req.nextUrl.searchParams.toString()
 
-  // Try Gamma first — has full event history going back to market creation
   try {
-    const gammaRes = await fetch(`${GAMMA}/prices-history${qs ? `?${qs}` : ''}`, {
+    const upstream = await fetch(`${CLOB}/prices-history${qs ? `?${qs}` : ''}`, {
       cache: 'no-store',
     })
-    if (gammaRes.ok) {
-      const data = await gammaRes.json().catch(() => null)
-      // Gamma returns { history: [...] } — only use it if history is non-empty
-      if (Array.isArray(data?.history) && data.history.length > 0) {
-        return NextResponse.json(data, { status: 200 })
-      }
-    }
-  } catch { /* fall through */ }
-
-  // Fall back to CLOB — shorter history but always up-to-date
-  try {
-    const clobRes = await fetch(`${CLOB}/prices-history${qs ? `?${qs}` : ''}`, {
-      cache: 'no-store',
-    })
-    const data = await clobRes.json().catch(() => null)
-    return NextResponse.json(data, { status: clobRes.status })
+    const data = await upstream.json().catch(() => null)
+    return NextResponse.json(data, { status: upstream.status })
   } catch {
-    return NextResponse.json({ error: 'Failed to reach Polymarket' }, { status: 502 })
+    return NextResponse.json({ error: 'Failed to reach Polymarket CLOB' }, { status: 502 })
   }
 }

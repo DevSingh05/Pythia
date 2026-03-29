@@ -235,13 +235,21 @@ export async function fetchPriceHistory(
   _marketId?: string,
 ): Promise<PricePoint[]> {
   if (!tokenId) return []
-  // Fetch full history (interval=max) so ProbChart's 1D/1W/1M/ALL buttons
-  // all work correctly via client-side filtering of the complete dataset.
-  const res = await apiFetch<{ history: { t: number; p: number }[] }>(
-    `/api/prices-history?market=${tokenId}&interval=max&fidelity=60`
-  )
-  // CLOB returns t in Unix seconds; PricePoint.t must be milliseconds for JS Date
-  return (res.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
+  // Fetch both daily history (for full lifetime) and hourly history (for noisy recent volatility)
+  const [resDaily, resHourly] = await Promise.all([
+    apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`).catch(() => null),
+    apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=60`).catch(() => null)
+  ])
+  
+  const daily = (resDaily?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
+  const hourly = (resHourly?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
+  
+  if (hourly.length === 0) return daily
+  if (daily.length === 0) return hourly
+  
+  const oldestHourly = hourly[0].t
+  // Stitch: all daily points older than the first hourly point, plus all hourly points
+  return [...daily.filter(pt => pt.t < oldestHourly), ...hourly]
 }
 
 // ─── Options data (Pythia backend) ────────────────────────────────────────────
