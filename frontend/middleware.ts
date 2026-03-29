@@ -28,11 +28,13 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getUser() refreshes the session token and writes it back to cookies.
-  // Do NOT put any other logic between createServerClient and getUser().
+  // Use getSession() for route gating only — avoids a Supabase Auth API round-trip on
+  // every /portfolio hit (getUser() validates remotely and contributes to rate limits).
+  // The browser client still refreshes tokens via onAuthStateChange.
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+  const user = session?.user ?? null
 
   const { pathname } = request.nextUrl
 

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 /**
  * ScenarioAnalysis
@@ -9,14 +9,14 @@
  * Extraction: drop this file + its import in page.tsx; requires:
  *   - @/lib/api       ΓåÆ Position
  *   - @/lib/paperTrade ΓåÆ PaperOrder, MarketSnapshot, INITIAL_BALANCE
- *   - @/lib/pricing   ΓåÆ vanillaCall, vanillaPut
+ *   - @/lib/pricing   ΓåÆ americanOptionBinomial
  *   - @/lib/utils     ΓåÆ cn, fmtProb, fmtPremium
  */
 
 import { useState, useMemo } from 'react'
 import { Position } from '@/lib/api'
 import { PaperOrder, MarketSnapshot, INITIAL_BALANCE } from '@/lib/paperTrade'
-import { vanillaCall, vanillaPut } from '@/lib/pricing'
+import { americanOptionBinomial, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 import { cn } from '@/lib/utils'
 import { SlidersHorizontal, TrendingUp, TrendingDown, RotateCcw } from 'lucide-react'
 
@@ -70,9 +70,14 @@ function computeScenarioValue(
     const remainingDays = Math.max(0.1, (ref?.daysToExpiry ?? 7) - daysSinceFill)
     const tau = remainingDays / 365
 
-    const scenarioPremium = pos.type === 'call'
-      ? vanillaCall(scenarioP, pos.strike, sigma, tau)
-      : vanillaPut(scenarioP, pos.strike, sigma, tau)
+    const scenarioPremium = americanOptionBinomial(
+      scenarioP,
+      pos.strike,
+      sigma,
+      tau,
+      AMERICAN_TREE_STEPS,
+      pos.type,
+    )
 
     // Long positions add value; short positions subtract (buyback liability)
     const sign = pos.side === 'long' ? 1 : -1

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -11,10 +11,11 @@ import ScenarioAnalysis from '@/components/ScenarioAnalysis'
 import PnlBreakdown from '@/components/PnlBreakdown'
 import EVCalculator from '@/components/EVCalculator'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
-import { fetchMarket, fetchVolatility, fetchAmericanPrice, Position } from '@/lib/api'
+import { fetchMarket, fetchOptionsChain, fetchAmericanPrice, Position } from '@/lib/api'
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, RotateCcw, Wallet, Briefcase } from 'lucide-react'
+import { StarButton } from '@/components/ui/star-button'
 
 export default function PortfolioPage() {
   const {
@@ -32,13 +33,13 @@ export default function PortfolioPage() {
 
     await Promise.allSettled(
       uniqueMarketIds.map(async (id) => {
-        const [market, vol] = await Promise.allSettled([
+        const [market, chain] = await Promise.allSettled([
           fetchMarket(id),
-          fetchVolatility(id),
+          fetchOptionsChain(id),
         ])
 
         const currentProb = market.status === 'fulfilled' ? market.value.currentProb : undefined
-        const impliedVol  = vol.status === 'fulfilled' ? (vol.value as any).sigma : undefined
+        const impliedVol  = chain.status === 'fulfilled' ? chain.value.impliedVol : undefined
 
         if (currentProb === undefined) return
 
@@ -69,7 +70,7 @@ export default function PortfolioPage() {
               })
               americanPrices.set(key, result.price)
             } catch {
-              // Pricing service unavailable — derivePositions falls back to vanilla
+              // /api/price failed — derivePositions uses local American binomial
             }
           })
         )
@@ -127,63 +128,56 @@ export default function PortfolioPage() {
     <div className="min-h-screen bg-bg">
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
-        {/* ΓöÇΓöÇ Top Bar ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-5">
+        {/* Top bar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Link
               href="/"
-              className="flex items-center gap-1.5 text-muted hover:text-slate-200 text-sm transition-colors"
+              className="flex items-center gap-1.5 text-muted hover:text-slate-200 text-sm transition-colors shrink-0"
             >
               <ArrowLeft className="w-4 h-4" />
               Markets
             </Link>
-            <span className="text-border">/</span>
-            <h1 className="text-lg font-semibold">Paper Portfolio</h1>
+            <span className="text-border shrink-0">/</span>
+            <h1 className="text-base sm:text-lg font-semibold truncate">Paper Portfolio</h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Balance pill */}
-            <div className="flex items-center gap-2 bg-surface border border-border rounded-lg px-3 py-1.5">
-              <Wallet className="w-3.5 h-3.5 text-accent" />
+          <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+            <div className="flex items-center gap-2 bg-surface border border-border rounded-lg px-2.5 sm:px-3 py-1.5">
+              <Wallet className="w-3.5 h-3.5 text-accent shrink-0" />
               <span className="text-xs font-mono font-semibold tabular-nums text-zinc-200">
                 ${balance.toFixed(2)}
               </span>
             </div>
 
-            <button
+            <StarButton
+              size="sm"
+              variant="ghost"
               onClick={handleManualRefresh}
               disabled={refreshing}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border',
-                'text-xs text-muted hover:text-zinc-200 hover:border-zinc-600 bg-surface transition-colors',
-                refreshing && 'opacity-60 cursor-not-allowed'
-              )}
             >
-              <RotateCcw className={cn('w-3 h-3', refreshing && 'animate-spin')} />
-              Refresh
-            </button>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red/30 text-xs text-red/70 hover:text-red hover:border-red/50 bg-surface transition-colors"
-            >
-              Reset
-            </button>
+              <RotateCcw className={cn('w-3 h-3 shrink-0', refreshing && 'animate-spin')} />
+              <span className="hidden sm:inline">Refresh</span>
+            </StarButton>
+            <StarButton size="sm" variant="danger" onClick={handleReset}>
+              <span className="sm:hidden">Reset</span>
+              <span className="hidden sm:inline">Reset portfolio</span>
+            </StarButton>
           </div>
         </div>
 
-        {/* ΓöÇΓöÇ KPI Strip ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* KPI strip */}
         {hydrated && <PortfolioSummary stats={stats} />}
 
-        {/* ΓöÇΓöÇ Main Grid: Chart (60%) + Open Positions (40%) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* Main grid: chart + positions */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          {/* Left: Equity Curve Chart */}
-          <div className="lg:col-span-3 bg-card border border-border rounded-xl p-4 min-h-[360px]">
+          <div className="lg:col-span-3 bg-card border border-border rounded-xl p-3 sm:p-4 min-h-[320px] sm:min-h-[360px]">
             <PnlChart data={equityCurve} className="h-full" />
           </div>
 
           {/* Right: Open Positions Sidebar */}
-          <div className="lg:col-span-2 bg-card border border-border rounded-xl flex flex-col max-h-[420px]">
+          <div className="lg:col-span-2 bg-card border border-border rounded-xl flex flex-col max-h-[min(420px,55vh)] lg:max-h-[420px]">
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
@@ -211,7 +205,7 @@ export default function PortfolioPage() {
                     href="/"
                     className="text-[10px] text-accent hover:underline"
                   >
-                    Browse Markets ΓåÆ
+                    Browse markets →
                   </Link>
                 </div>
               )}
@@ -219,12 +213,12 @@ export default function PortfolioPage() {
           </div>
         </div>
 
-        {/* ΓöÇΓöÇ P&L Breakdown ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* P&L breakdown */}
         {hydrated && positions.length > 0 && (
           <PnlBreakdown positions={positions} orders={orders} marketPrices={marketPrices} />
         )}
 
-        {/* ΓöÇΓöÇ Scenario Analysis ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* Scenario analysis */}
         {hydrated && positions.length > 0 && (
           <ScenarioAnalysis
             positions={positions}
@@ -234,7 +228,7 @@ export default function PortfolioPage() {
           />
         )}
 
-        {/* ΓöÇΓöÇ EV Calculator ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* EV calculator */}
         {hydrated && positions.length > 0 && (
           <EVCalculator
             positions={positions}
@@ -243,7 +237,7 @@ export default function PortfolioPage() {
           />
         )}
 
-        {/* ΓöÇΓöÇ Full-Width Order History ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* Order history */}
         <OrderHistory orders={orders} marketPrices={marketPrices} />
 
         {/* Footer */}

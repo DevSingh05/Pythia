@@ -65,6 +65,16 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Star button sparkle */
+@keyframes star-spin {
+  0%   { transform: rotate(0deg) scale(0.6); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: rotate(72deg) scale(1); opacity: 0.9; }
+}
+.animate-star-spin {
+  animation: star-spin 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Sphere hero fade-in */
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(16px); }
@@ -72,4 +82,25 @@ html, body {
 }
 .animate-fade-in-up {
   animation: fade-in-up 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Demo mode: order book, premium ticker, overlays */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes sweepRight {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes demo-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.9); }
+}
+@keyframes liquidityShimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
 }

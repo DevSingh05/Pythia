@@ -15,8 +15,6 @@ export async function GET(
   if (interval === '1d') days = 1
   if (interval === '7d') days = 7
   if (interval === '30d') days = 30
-  if (interval === '1h') days = 1 // closest approximation for MDS
-  if (interval === '6h') days = 1
 
   try {
     const upstream = await fetch(`${MDS}/markets/${id}/history?days=${days}`, { next: { revalidate: 60 } })

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import {
@@ -53,7 +53,6 @@ export default function PnlChart({ data, className }: PnlChartProps) {
   const [range, setRange] = useState<Range>('ALL')
   const filtered = filterByRange(data, range)
 
-  // Color based on first vs last
   const first = filtered[0]?.balance ?? INITIAL_BALANCE
   const last = filtered[filtered.length - 1]?.balance ?? INITIAL_BALANCE
   const isUp = last >= first
@@ -73,10 +72,9 @@ export default function PnlChart({ data, className }: PnlChartProps) {
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-3">
         <div>
-          <div className="text-xs text-muted uppercase tracking-wider font-medium">Equity Curve</div>
+          <div className="text-xs text-muted uppercase tracking-wider font-medium">Equity curve</div>
           <div className="flex items-baseline gap-2 mt-0.5">
             <span className="text-lg font-semibold font-mono tabular-nums">${last.toFixed(2)}</span>
             <span className={cn('text-xs font-mono font-medium', isUp ? 'text-green' : 'text-red')}>
@@ -84,16 +82,17 @@ export default function PnlChart({ data, className }: PnlChartProps) {
             </span>
           </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1 justify-start sm:justify-end">
           {RANGES.map(r => (
             <button
               key={r}
+              type="button"
               onClick={() => setRange(r)}
               className={cn(
                 'px-2.5 py-1 text-[10px] rounded-md font-medium transition-colors',
                 range === r
                   ? 'bg-accent/15 text-accent border border-accent/30'
-                  : 'text-muted hover:text-zinc-300 hover:bg-surface'
+                  : 'text-muted hover:text-zinc-300 hover:bg-surface border border-transparent'
               )}
             >
               {r}
@@ -102,7 +101,6 @@ export default function PnlChart({ data, className }: PnlChartProps) {
         </div>
       </div>
 
-      {/* Chart */}
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={filtered} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>

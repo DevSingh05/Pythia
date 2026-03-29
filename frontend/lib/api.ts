@@ -249,51 +249,25 @@ export async function fetchPriceHistory(
   _marketId?: string,
 ): Promise<PricePoint[]> {
   if (!tokenId) return []
-  const [resDaily, resHourly] = await Promise.all([
-    apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`).catch(() => null),
-    apiFetch<{ history: { t: number; p: number }[] }>(`/api/prices-history?market=${tokenId}&interval=max&fidelity=60`).catch(() => null)
-  ])
-
-  const daily = (resDaily?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
-  const hourly = (resHourly?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
-
-  if (hourly.length === 0) return daily
-  if (daily.length === 0) return hourly
-
-  const oldestHourly = hourly[0].t
-  // Stitch: all daily points older than the first hourly point, plus all hourly points
-  return [...daily.filter(pt => pt.t < oldestHourly), ...hourly]
+  const res = await apiFetch<{ history: { t: number; p: number }[] }>(
+    `/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`
+  ).catch(() => null)
+  return (res?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
 }
 
 /**
- * Fetch stitched price history for chart display.
- * Combines daily (full lifetime, ~272 pts) + hourly (recent ~21 days, ~500 pts)
- * to get both the full range AND recent detail — matching Polymarket's chart.
- *
- * Single request version available via `lite` flag for vol estimation.
+ * Fetch price history for chart display.
+ * CLOB only returns data for interval=max&fidelity=1440 — all other
+ * interval/fidelity combinations return empty history.
  */
 export async function fetchPriceHistoryFast(tokenId: string): Promise<PricePoint[]> {
   if (!tokenId) return []
 
-  // Fetch daily (full lifetime) + hourly (recent detail) in parallel
-  const [resDaily, resHourly] = await Promise.all([
-    apiFetch<{ history: { t: number; p: number }[] }>(
-      `/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`
-    ).catch(() => null),
-    apiFetch<{ history: { t: number; p: number }[] }>(
-      `/api/prices-history?market=${tokenId}&interval=max&fidelity=60`
-    ).catch(() => null),
-  ])
+  const res = await apiFetch<{ history: { t: number; p: number }[] }>(
+    `/api/prices-history?market=${tokenId}&interval=max&fidelity=1440`
+  ).catch(() => null)
 
-  const daily = (resDaily?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
-  const hourly = (resHourly?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
-
-  if (hourly.length === 0) return daily
-  if (daily.length === 0) return hourly
-
-  // Stitch: daily points for the old range + hourly for the recent range
-  const oldestHourly = hourly[0].t
-  return [...daily.filter(pt => pt.t < oldestHourly), ...hourly]
+  return (res?.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
 }
 
 // ─── Options data (Pythia backend) ────────────────────────────────────────────
@@ -326,6 +300,16 @@ export interface OptionsChainResponse {
   calls: OptionQuote[]
   puts: OptionQuote[]
   updatedAt: string
+}
+
+export interface VolatilityResponse {
+  sigma: number
+  source?: string
+}
+
+/** Implied / estimated σ for a market (MDS or historical fallback). */
+export async function fetchVolatility(marketId: string): Promise<VolatilityResponse> {
+  return apiFetch<VolatilityResponse>(`${MARKETS_BASE}/markets/${marketId}/vol`)
 }
 
 /** Fetch options chain from Pythia pricing engine. */
@@ -401,12 +385,12 @@ export interface AmericanPriceResult {
   theta: number
   vega: number
   gamma: number
-  source: 'american' | 'european_fallback'
+  /** Python service, or same American tree in Node when the service is down */
+  source: 'american' | 'american_local'
 }
 
 /**
- * Price a single contract via the /api/price route.
- * Returns American pricing when the Python service is up, European vanilla otherwise.
+ * Price a single contract via the /api/price route (American binomial only).
  */
 export async function fetchAmericanPrice(params: {
   p0: number

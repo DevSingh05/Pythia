@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { PaperOrder, MarketSnapshot } from '@/lib/paperTrade'
-import { vanillaCall, vanillaPut } from '@/lib/pricing'
+import { americanOptionBinomial, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { ExternalLink } from 'lucide-react'
 import InfoTooltip from '@/components/InfoTooltip'
@@ -38,9 +38,14 @@ function computeOrderPnl(
   const remainingDays = Math.max(0.1, order.daysToExpiry - daysSinceFill)
   const tau = remainingDays / 365
 
-  const currentPremium = order.type === 'call'
-    ? vanillaCall(snap.currentProb, order.strike, snap.impliedVol, tau)
-    : vanillaPut(snap.currentProb, order.strike, snap.impliedVol, tau)
+  const currentPremium = americanOptionBinomial(
+    snap.currentProb,
+    order.strike,
+    snap.impliedVol,
+    tau,
+    AMERICAN_TREE_STEPS,
+    order.type,
+  )
 
   const diff = currentPremium - order.premium
   // Buy orders profit when premium increases, sell orders profit when premium decreases
@@ -91,7 +96,7 @@ export default function OrderHistory({ orders, marketPrices }: OrderHistoryProps
               </th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">Total</th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">
-                <span className="flex items-center gap-0.5">P&amp;L <InfoTooltip explanation="Estimated gain or loss on this specific order leg. Calculated by repricing the option at current market conditions vs. your fill price." side="bottom" /></span>
+                <span className="flex items-center gap-0.5">{'P&L'} <InfoTooltip explanation="Estimated gain or loss on this specific order leg. Calculated by repricing the option at current market conditions vs. your fill price." side="bottom" /></span>
               </th>
               <th className="text-left text-muted/80 font-medium px-3 py-2 whitespace-nowrap">
                 <span className="flex items-center gap-0.5">IV <InfoTooltip explanation="Implied Volatility used to price this option at fill time. Higher IV means the market was pricing in more uncertainty." side="bottom" /></span>

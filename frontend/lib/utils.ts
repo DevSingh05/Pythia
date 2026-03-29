@@ -10,7 +10,13 @@ export function fmtProb(p: number, decimals = 0): string {
 }
 
 export function fmtPremium(p: number): string {
-  if (p < 0.01) return `${(p * 100).toFixed(2)}¢`
+  if (!Number.isFinite(p) || p < 0) return '$0.000'
+  // Sub-$0.01: extra decimals so deep OTM does not look "free" ($0.000)
+  if (p < 0.01) {
+    if (p > 0 && p < 0.0001) return '<$0.0001'
+    const decimals = p < 0.001 ? 5 : 4
+    return `$${p.toFixed(decimals)}`
+  }
   return `$${p.toFixed(3)}`
 }
 

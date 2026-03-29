@@ -1,19 +1,10 @@
 /**
  * Single-contract American option pricing.
- * Tries the Python pricing service (American binomial tree).
- * Falls back transparently to European vanilla if the service is unavailable.
+ * Prefers the Python pricing service; falls back to the same American binomial in TypeScript.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  vanillaCall,
-  vanillaPut,
-  callDelta,
-  putDelta,
-  callTheta,
-  gamma as calcGamma,
-  callVega,
-} from '@/lib/pricing'
+import { americanGreeks, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 
 const PRICER = process.env.PRICING_SERVICE_URL || 'http://localhost:8000'
 
@@ -56,20 +47,17 @@ export async function POST(req: NextRequest) {
       })
     }
   } catch {
-    // Service unavailable — fall through to European vanilla fallback
+    // Service unavailable — local American tree
   }
 
-  // ─── European vanilla fallback (computed in TypeScript) ───────────────────
   const tau = tau_days / 365
-  const price = type === 'call'
-    ? vanillaCall(p0, strike, sigma, tau)
-    : vanillaPut(p0, strike, sigma, tau)
-  const delta = type === 'call'
-    ? callDelta(p0, strike, sigma, tau)
-    : putDelta(p0, strike, sigma, tau)
-  const theta = callTheta(p0, strike, sigma, tau)
-  const g     = calcGamma(p0, strike, sigma, tau)
-  const vega  = callVega(p0, strike, sigma, tau)
-
-  return NextResponse.json({ price, delta, theta, vega, gamma: g, source: 'european_fallback' })
+  const g = americanGreeks(p0, strike, sigma, tau, type, AMERICAN_TREE_STEPS)
+  return NextResponse.json({
+    price: g.price,
+    delta: g.delta,
+    theta: g.theta,
+    vega: g.vega,
+    gamma: g.gamma,
+    source: 'american_local',
+  })
 }

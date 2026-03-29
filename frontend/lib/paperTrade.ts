@@ -5,7 +5,7 @@
  */
 
 import { Position } from '@/lib/api'
-import { vanillaCall, vanillaPut, callDelta, putDelta, callTheta, gamma as calcGamma, callVega } from '@/lib/pricing'
+import { americanOptionBinomial, americanGreeks, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 
 // --- Types ---
 
@@ -32,8 +32,7 @@ export interface MarketSnapshot {
   impliedVol: number
   /**
    * American option prices keyed by `${strike}|${type}|${roundedTauDays}`.
-   * When present, derivePositions uses these instead of European vanilla
-   * so P&L reflects the American early-exercise premium.
+   * When present, derivePositions prefers these over a fresh local American tree.
    */
   americanPrices?: Map<string, number>
 }
@@ -90,15 +89,13 @@ export function derivePositions(
     const remainingDays = Math.max(0.1, ref.daysToExpiry - daysSinceFill)
     const tau = remainingDays / 365
 
-    // Prefer American price; fall back to European vanilla.
     const tauDaysKey = String(Math.round(remainingDays))
     const americanKey = `${ref.strike}|${ref.type}|${tauDaysKey}`
     const americanPrice = snap?.americanPrices?.get(americanKey)
-    const currentPremium = americanPrice !== undefined
-      ? americanPrice
-      : ref.type === 'call'
-        ? vanillaCall(p0, ref.strike, sigma, tau)
-        : vanillaPut(p0, ref.strike, sigma, tau)
+    const currentPremium =
+      americanPrice !== undefined
+        ? americanPrice
+        : americanOptionBinomial(p0, ref.strike, sigma, tau, AMERICAN_TREE_STEPS, ref.type)
 
     const absQty = Math.abs(netQty)
     const side: 'long' | 'short' = netQty > 0 ? 'long' : 'short'
@@ -107,10 +104,9 @@ export function derivePositions(
     const pnl = side === 'long' ? currentValue - costBasis : costBasis - currentValue
     const pnlPct = costBasis > 0 ? pnl / costBasis : 0
 
-    const delta = ref.type === 'call'
-      ? callDelta(p0, ref.strike, sigma, tau)
-      : putDelta(p0, ref.strike, sigma, tau)
-    const theta = callTheta(p0, ref.strike, sigma, tau)
+    const ag = americanGreeks(p0, ref.strike, sigma, tau, ref.type, AMERICAN_TREE_STEPS)
+    const delta = ag.delta
+    const theta = ag.theta
 
     positions.push({
       marketId: ref.marketId,
@@ -232,9 +228,10 @@ export function computePortfolioStats(
     const tau = remainingDays / 365
 
     netDelta += pos.delta * pos.quantity * sign
-    netGamma += calcGamma(p0, pos.strike, sigma, tau) * pos.quantity * sign
+    const greek = americanGreeks(p0, pos.strike, sigma, tau, pos.type, AMERICAN_TREE_STEPS)
+    netGamma += greek.gamma * pos.quantity * sign
     netTheta += pos.theta * pos.quantity * sign
-    netVega  += callVega(p0, pos.strike, sigma, tau) * pos.quantity * sign
+    netVega += greek.vega * pos.quantity * sign
   }
 
   const sorted = [...positions].sort((a, b) => b.pnl - a.pnl)

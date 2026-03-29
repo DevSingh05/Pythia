@@ -1,14 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
-import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
-import PayoffChart from './PayoffChart'
-import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
+import { OptionQuote, AppMarket, OptionsChainResponse, placeOrder } from '@/lib/api'
+import type { ProbChartOutcomeInfo } from '@/components/ProbChart'
+import PreTradeAnalysis from '@/components/PreTradeAnalysis'
+import PayoffChart, { computePayoffMetrics, fmtCents } from './PayoffChart'
+import {
+  Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown, Loader2,
+  ChevronRight, LineChart,
+} from 'lucide-react'
+import { StarButton } from './ui/star-button'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
 import { generateOrderId } from '@/lib/paperTrade'
+import DemoOrderBook from './demo/DemoOrderBook'
+import DemoPremiumTicker from './demo/DemoPremiumTicker'
+import type { UseDemoModeReturn } from '@/hooks/useDemoMode'
+import type { DemoPnlScenario } from '@/lib/demoSimulation'
 
 interface TradePanelProps {
   market: AppMarket
@@ -16,16 +26,38 @@ interface TradePanelProps {
   side: 'buy' | 'sell'
   onSideChange: (s: 'buy' | 'sell') => void
   className?: string
+  /** Live chain (IV/HV + consistency with pricer); required for Analyze. */
+  chain?: OptionsChainResponse | null
+  /** Multi-outcome YES lines for analysis chart; optional. */
+  probChartOutcomes?: ProbChartOutcomeInfo[]
+  demoMode?: UseDemoModeReturn
+  /** Clears selection + resets demo (e.g. parent calls demo.reset + setSelectedOption(null)) */
+  onDemoTryAnother?: () => void
 }
 
-export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {
+export default function TradePanel({
+  market,
+  option,
+  side,
+  onSideChange,
+  className,
+  chain,
+  probChartOutcomes,
+  demoMode,
+  onDemoTryAnother,
+}: TradePanelProps) {
   const { user, getToken } = useAuth()
   const { addOrder } = usePaperTrades()
   const [showAuth, setShowAuth] = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [orderError, setOrderError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setShowAnalysis(false)
+  }, [option?.strike, option?.type, option?.expiry, market.id])
 
   if (!option) {
     return (
@@ -45,12 +77,26 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
 
   const isCall = option.type === 'call'
   const totalCost = option.premium * quantity
+  const noExecutablePremium =
+    !Number.isFinite(option.premium) || option.premium <= 0
+
+  const demoActive = demoMode?.isActive ?? false
+  const demoStep = demoMode?.step
+  const demoPhase = demoStep?.phase
+  const isDemoFilling = demoMode && demoPhase === 'filling'
+  const isDemoProcessing = demoMode && demoPhase === 'processing'
+  const isDemoSuccess = demoMode && demoPhase === 'success' && demoStep?.pnlScenario && demoStep.option
 
   const handleSubmit = async () => {
+    if (demoActive) return
+    if (noExecutablePremium) {
+      setOrderError('No quoted premium for this strike — not executable (deep OTM or stale quote).')
+      return
+    }
     setLoading(true)
     setOrderError(null)
     try {
-      const token = await getToken()
+      const token = getToken()
       await placeOrder(
         {
           marketId: market.id,
@@ -95,6 +141,10 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
     }
   }
 
+  const handleDemoTryAnother = () => {
+    onDemoTryAnother?.()
+  }
+
   if (submitted) {
     return (
       <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/40 p-6 flex flex-col items-center justify-center gap-2 min-h-[200px]', className)}>
@@ -112,16 +162,52 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
     )
   }
 
+  if (isDemoSuccess && demoStep && demoMode) {
+    const dOpt = demoStep.option!
+    const dq = demoStep.quantity
+    const pnl = demoStep.pnlScenario!
+    return (
+      <>
+        <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/30 overflow-hidden', className)}>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border-b border-emerald-500/25 text-emerald-400 text-[10px] font-medium">
+            <FlaskConical className="w-3 h-3 shrink-0" />
+            Demo fill complete — paper only, no order placed
+          </div>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/60">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'text-xs font-mono font-semibold px-2 py-0.5 rounded',
+                dOpt.type === 'call' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+              )}>
+                {fmtProb(dOpt.strike)} {dOpt.type.toUpperCase()}
+              </span>
+              <span className="text-xs text-zinc-500">{dOpt.expiry}</span>
+            </div>
+          </div>
+          <div className="p-4 space-y-4">
+            <DemoSuccessBody
+              option={dOpt}
+              quantity={dq}
+              pnl={pnl}
+              onTryAnother={handleDemoTryAnother}
+            />
+          </div>
+        </div>
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+      </>
+    )
+  }
+
+  const demoStepForBook = demoStep && demoStep.option ? demoStep : null
+
   return (
     <>
     <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/30 overflow-hidden', className)}>
-      {/* Paper-trading notice */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-[10px] font-medium">
         <FlaskConical className="w-3 h-3 shrink-0" />
         Paper Trading — orders are simulated and tracked in your account
       </div>
 
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/60">
         <div className="flex items-center gap-2">
           <span className={cn(
@@ -136,9 +222,12 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           {(['buy', 'sell'] as const).map(s => (
             <button
               key={s}
+              type="button"
+              disabled={demoActive}
               onClick={() => onSideChange(s)}
               className={cn(
                 'px-3 py-1.5 font-medium capitalize transition-colors',
+                demoActive && 'opacity-50 cursor-not-allowed',
                 side === s
                   ? s === 'buy' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                   : 'text-zinc-400 hover:text-zinc-200 bg-transparent'
@@ -151,7 +240,42 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Payoff chart — centerpiece */}
+        {isDemoFilling && demoStepForBook && (
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(0,140px)] gap-3 items-start">
+            <DemoOrderBook demoStep={demoStepForBook} />
+            <DemoPremiumTicker demoStep={demoStepForBook} />
+          </div>
+        )}
+
+        {isDemoProcessing && demoStepForBook && (
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(0,140px)] gap-3 items-start opacity-90">
+            <DemoOrderBook demoStep={demoStepForBook} />
+            <DemoPremiumTicker demoStep={demoStepForBook} />
+          </div>
+        )}
+
+        {!isDemoFilling && !isDemoProcessing && (() => {
+          const { maxPnl, minPnl, breakevenProb, beAnalytic } = computePayoffMetrics(option, side, quantity)
+          return (
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className="rounded-lg bg-red-500/[0.07] border border-red-500/20 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Loss</div>
+                <div className="text-sm font-mono font-bold text-red-400">{fmtCents(minPnl)}</div>
+              </div>
+              <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/40 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Breakeven</div>
+                <div className="text-sm font-mono font-bold text-amber-400">
+                  {beAnalytic != null ? `${(breakevenProb * 100).toFixed(1)}%` : '—'}
+                </div>
+              </div>
+              <div className="rounded-lg bg-emerald-500/[0.07] border border-emerald-500/20 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
+                <div className="text-sm font-mono font-bold text-emerald-400">{fmtCents(maxPnl)}</div>
+              </div>
+            </div>
+          )
+        })()}
+
         <PayoffChart
           option={option}
           side={side}
@@ -159,32 +283,36 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           currentProb={market.currentProb}
         />
 
-        {/* Premium + breakeven */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Premium / contract</div>
-            <div className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</div>
+        {!isDemoFilling && !isDemoProcessing && (
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / contract</span>
+            <span className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</span>
           </div>
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Breakeven YES%</div>
-            <div className="text-sm font-mono font-semibold text-blue-400">{fmtProb(option.breakeven, 1)}</div>
-          </div>
-        </div>
+        )}
 
-        {/* Quantity + total */}
         <div className="flex items-center justify-between bg-zinc-800/40 rounded-lg px-3 py-2.5">
           <span className="text-xs text-zinc-400">Contracts</span>
           <div className="flex items-center gap-3">
             <button
+              type="button"
+              disabled={demoActive}
               onClick={() => setQuantity(q => Math.max(1, q - 1))}
-              className="w-6 h-6 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 transition-colors"
+              className={cn(
+                'w-6 h-6 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 transition-colors',
+                demoActive && 'opacity-40 cursor-not-allowed'
+              )}
             >
               <Minus className="w-3 h-3" />
             </button>
             <span className="text-sm font-mono tabular-nums w-5 text-center text-zinc-100">{quantity}</span>
             <button
+              type="button"
+              disabled={demoActive}
               onClick={() => setQuantity(q => q + 1)}
-              className="w-6 h-6 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 transition-colors"
+              className={cn(
+                'w-6 h-6 rounded-md border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-100 hover:border-zinc-500 transition-colors',
+                demoActive && 'opacity-40 cursor-not-allowed'
+              )}
             >
               <Plus className="w-3 h-3" />
             </button>
@@ -195,7 +323,6 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         </div>
 
-        {/* Errors */}
         {orderError && (
           <div className="flex gap-2 text-xs text-red-400 bg-red-500/8 border border-red-500/20 rounded-lg p-2.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -210,38 +337,163 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         )}
 
-        {/* Submit — gated on auth */}
-        {user ? (
+        {noExecutablePremium && (
+          <div className="flex gap-2 text-xs text-amber-400/90 bg-amber-500/8 border border-amber-500/25 rounded-lg p-2.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              Premium is zero or missing — you cannot buy this for free; pick a strike with a positive quote or refresh.
+            </span>
+          </div>
+        )}
+
+        {chain ? (
           <button
-            onClick={handleSubmit}
-            disabled={loading}
+            type="button"
+            disabled={demoActive}
+            onClick={() => setShowAnalysis(true)}
             className={cn(
-              'w-full py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-colors',
-              side === 'buy'
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                : 'bg-red-600 hover:bg-red-500 text-white',
-              loading && 'opacity-50 cursor-not-allowed'
+              'w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-colors',
+              'border border-zinc-600 bg-zinc-800/50 text-zinc-200 hover:bg-zinc-800 hover:border-zinc-500',
+              demoActive && 'opacity-50 cursor-not-allowed',
             )}
           >
-            {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`}
+            <LineChart className="w-4 h-4 text-violet-400 shrink-0" />
+            Analyze before trading
+            <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
           </button>
         ) : (
+          <p className="text-[10px] text-zinc-600 text-center">Analysis unlocks when the options chain finishes loading.</p>
+        )}
+
+        {demoMode && !demoActive && (
           <button
-            onClick={() => setShowAuth(true)}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors bg-accent hover:bg-accent/90 text-white flex items-center justify-center gap-2"
+            type="button"
+            onClick={() => demoMode.startDemo(option)}
+            className={cn(
+              'w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-colors',
+              'border border-amber-500/35 bg-amber-500/[0.08] text-amber-200 hover:bg-amber-500/15 hover:border-amber-500/50',
+            )}
           >
-            <LogIn className="w-4 h-4" />
-            Log in to place orders
+            Add to paper order book
           </button>
         )}
 
+        {user ? (
+          <StarButton
+            variant={side === 'buy' ? 'buy' : 'sell'}
+            size="lg"
+            onClick={handleSubmit}
+            disabled={loading || noExecutablePremium || demoActive}
+            className={cn(
+              'w-full justify-center py-2.5 text-sm font-semibold tracking-wide transition-colors relative',
+              side === 'buy'
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                : 'bg-red-600 hover:bg-red-500 text-white',
+              (loading || noExecutablePremium || demoActive) && 'opacity-50 cursor-not-allowed'
+            )}
+          >
+            {isDemoProcessing ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                Processing…
+              </span>
+            ) : demoActive ? (
+              'Demo in progress…'
+            ) : loading ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                Processing…
+              </span>
+            ) : (
+              `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`
+            )}
+          </StarButton>
+        ) : (
+          <StarButton
+            size="lg"
+            onClick={() => setShowAuth(true)}
+            disabled={demoActive}
+            className="w-full justify-center"
+          >
+            <LogIn className="w-4 h-4" />
+            Log in to place orders
+          </StarButton>
+        )}
+
         <p className="text-[10px] text-zinc-600 text-center">
-          European · Cash settled · Logit-Normal pricing
+          American exercise · Cash settled · Logit-normal tree
         </p>
       </div>
     </div>
 
     {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+    {showAnalysis && chain && (
+      <PreTradeAnalysis
+        option={option}
+        side={side}
+        quantity={quantity}
+        market={market}
+        chain={chain}
+        outcomes={probChartOutcomes}
+        onClose={() => setShowAnalysis(false)}
+        onAddToPaperDemo={
+          demoMode && !demoMode.isActive
+            ? () => {
+                demoMode.startDemo(option)
+                setShowAnalysis(false)
+              }
+            : undefined
+        }
+      />
+    )}
     </>
+  )
+}
+
+function DemoSuccessBody({
+  option,
+  quantity,
+  pnl,
+  onTryAnother,
+}: {
+  option: OptionQuote
+  quantity: number
+  pnl: DemoPnlScenario
+  onTryAnother: () => void
+}) {
+  const bullCase = pnl.gain5pp
+  const bearCase = pnl.maxLoss
+  return (
+    <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/[0.06] p-4 space-y-4">
+      <div className="flex items-start gap-2">
+        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+          <TrendingUp className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-emerald-400">Demo order filled</p>
+          <p className="text-xs text-zinc-400 mt-1">
+            Bought {quantity}× {option.type.toUpperCase()} @ {fmtPremium(option.premium)} / contract
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="rounded-lg bg-zinc-900/60 border border-emerald-500/20 p-3">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Bullish (+5pp)</div>
+          <div className="font-mono font-semibold text-emerald-400">
+            {fmtCents(bullCase)}
+          </div>
+        </div>
+        <div className="rounded-lg bg-zinc-900/60 border border-red-500/20 p-3">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Bearish (max loss)</div>
+          <div className="font-mono font-semibold text-red-400">{fmtCents(bearCase)}</div>
+        </div>
+      </div>
+      <p className="text-[10px] text-zinc-500">
+        Breakeven YES {(pnl.breakeven * 100).toFixed(1)}% · Max gain {fmtCents(pnl.maxGain)}
+      </p>
+      <StarButton type="button" variant="primary" size="md" className="w-full justify-center" onClick={onTryAnother}>
+        Try another trade
+      </StarButton>
+    </div>
   )
 }

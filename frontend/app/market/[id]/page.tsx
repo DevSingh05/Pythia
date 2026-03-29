@@ -9,6 +9,7 @@ import TradePanel from '@/components/TradePanel'
 import GreeksPanel from '@/components/GreeksPanel'
 import { useMarket } from '@/hooks/useMarkets'
 import { useOptionsChain } from '@/hooks/useOptionsChain'
+import { useDemoMode } from '@/hooks/useDemoMode'
 import { cn, fmtUSDC, fmtProb } from '@/lib/utils'
 import { OptionQuote } from '@/lib/api'
 import {
@@ -63,7 +64,15 @@ export default function MarketPage() {
 
   const [selectedOption, setSelectedOption] = useState<OptionQuote | null>(null)
   const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy')
-  const [selectedExpiry, setSelectedExpiry] = useState('1W')
+  // Match API / pricer labels (3D, 7D, 14D, 30D) so ?expiry= filters chain rows
+  const [selectedExpiry, setSelectedExpiry] = useState('7D')
+  const demo = useDemoMode()
+
+  useEffect(() => {
+    setSelectedOption(null)
+  }, [selectedExpiry])
+
+  useEffect(() => () => demo.reset(), [demo.reset])
 
   const { market, loading: mktLoading, error: mktError } = useMarket(id)
   const polySlug = searchParams.get('ps') ?? market?.slug ?? id
@@ -277,13 +286,22 @@ export default function MarketPage() {
             ) : (
               <OptionsChain
                 chain={chain}
+                selectedExpiry={selectedExpiry}
                 onSelectOption={opt => {
                   setSelectedOption(opt)
                   setTradeSide('buy')
                 }}
+                onAddToPaperDemo={opt => {
+                  setSelectedOption(opt)
+                  setTradeSide('buy')
+                  demo.startDemo(opt)
+                }}
                 onExpiryChange={setSelectedExpiry}
                 selectedOption={selectedOption}
                 showGreeks={true}
+                isDemoMode={demo.isActive}
+                demoOption={demo.step.option}
+                demoPhase={demo.step.phase}
               />
             )}
           </div>
@@ -296,6 +314,13 @@ export default function MarketPage() {
                 option={selectedOption}
                 side={tradeSide}
                 onSideChange={setTradeSide}
+                chain={chain}
+                probChartOutcomes={chartOutcomes}
+                demoMode={demo}
+                onDemoTryAnother={() => {
+                  demo.reset()
+                  setSelectedOption(null)
+                }}
               />
             )}
             {selectedOption && market && (

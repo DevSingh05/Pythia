@@ -20,8 +20,13 @@ SIGMA_FLOOR = 0.05
 SIGMA_CAP = 5.0
 PROB_CLAMP = (1e-6, 1 - 1e-6)
 
-STRIKE_GRID = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
-EXPIRY_GRID = [7, 14, 21, 30]  # days
+STRIKE_GRID = [
+    0.03, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25,
+    0.28, 0.30, 0.33, 0.35, 0.38, 0.40, 0.42, 0.45, 0.48, 0.50,
+    0.52, 0.55, 0.58, 0.60, 0.62, 0.65, 0.68, 0.70, 0.72, 0.75,
+    0.78, 0.80, 0.82, 0.85, 0.88, 0.90, 0.92, 0.95, 0.97,
+]
+EXPIRY_GRID = [3, 7, 14, 30]  # days
 
 # ── Core transforms ────────────────────────────────────────────────────────────
 
@@ -61,7 +66,7 @@ def american_option_binomial(
         p0:    current probability in (0, 1)
         K:     strike probability in (0, 1)
         sigma: annualised logit-space volatility (e.g. 0.60 = 60%)
-        tau:   time to expiry in years (e.g. 30/252)
+        tau:   time to expiry in years (e.g. 30/365 calendar)
         N:     number of tree steps (100 → ~1.5ms, error < 0.08%)
         kind:  "call" or "put"
 
@@ -127,15 +132,36 @@ def greeks(
 
     dp = 0.01       # 1% probability bump
     ds = 0.01       # 1% vol bump
-    dt = 1 / 252    # 1 trading day
+    dt = 1 / 365    # one calendar day (Polymarket)
 
     delta = (price(p0 + dp, sigma, tau) - price(p0 - dp, sigma, tau)) / (2 * dp)
     vega  = (price(p0, sigma + ds, tau) - price(p0, sigma - ds, tau)) / (2 * ds)
     theta = (price(p0, sigma, tau - dt) - base) / dt   # $/day, negative
-    gamma = (price(p0 + dp, sigma, tau) - 2 * base + price(p0 - dp, sigma, tau)) / (dp ** 2)
+
+    # Gamma: d²V/dp² scaled to "delta change per 1pp move"
+    #
+    # Raw d²V/dp² gives values of ~25-30 at ATM because the underlying
+    # range is [0,1] — curvature is inherently ~100x stock-world gamma.
+    # d²V/dL² (logit-space) goes negative for deep ITM due to sigmoid''(L)<0,
+    # which is mathematically correct but misleading (long call = negative gamma?).
+    #
+    # Solution: compute probability-space gamma, then normalise to per-pp.
+    # Γ_display = d²V/dp² × 0.01  →  "if prob moves 1pp, delta changes by Γ"
+    #
+    # Properties:
+    #   - Always non-negative for long vanilla options  ✓
+    #   - Peaks ATM (~0.25), tapers to ~0 deep ITM/OTM  ✓
+    #   - Comparable magnitude to stock-world gamma      ✓
+    #   - Consistent between backend and frontend        ✓
+    gp = 0.005   # half-pp bump for stable second derivative
+    p_up = safe_prob(p0 + gp)
+    p_dn = safe_prob(p0 - gp)
+    raw_gamma = (price(p_up, sigma, tau) - 2 * base + price(p_dn, sigma, tau)) / (gp ** 2)
+    gamma = raw_gamma * 0.01  # normalise to delta-change per 1pp
 
     return {
-        "price": round(base, 6),
+        # Keep extra precision so deep OTM premiums are not rounded to 0.00 while Greeks stay non-zero
+        "price": round(base, 8),
         "delta": round(float(delta), 6),
         "theta": round(float(theta), 6),
         "vega":  round(float(vega), 6),
@@ -162,7 +188,7 @@ def early_exercise_boundary(
     Returns list of {tau_days, p_star}.
     """
     boundary = []
-    for t in np.linspace(1 / 252, tau, steps):
+    for t in np.linspace(1 / 365, tau, steps):
         if kind == "call":
             lo, hi = K, 1.0 - 1e-6
         else:
@@ -178,7 +204,7 @@ def early_exercise_boundary(
             else:
                 lo = mid
 
-        boundary.append({"tau_days": round(t * 252, 1), "p_star": round((lo + hi) / 2.0, 6)})
+        boundary.append({"tau_days": round(t * 365, 1), "p_star": round((lo + hi) / 2.0, 6)})
 
     return boundary
 
@@ -213,28 +239,36 @@ def vanilla_call_price(p0: float, K: float, sigma: float, tau: float) -> float:
 
 
 def vanilla_put_price(p0: float, K: float, sigma: float, tau: float) -> float:
-    """European put via put-call parity under logit-normal dynamics."""
+    """Put via put-call parity; floored at spot intrinsic (American lower bound)."""
+    p0s = safe_prob(p0)
+    intrinsic = max(K - p0s, 0.0)
+    if tau <= 0:
+        return float(intrinsic)
+
     call = vanilla_call_price(p0, K, sigma, tau)
     # Put-call parity: C - P = E[p_T] - K
-    # Under driftless logit-normal: E[p_T] = E[sigmoid(L_T)]
-    # Computed numerically since logit-normal expectation has no closed form
     L0  = logit(p0)
-    std = clamp_sigma(sigma) * np.sqrt(max(tau, 0))
+    std = clamp_sigma(sigma) * np.sqrt(tau)
     lo  = L0 - 8 * std
     hi  = L0 + 8 * std
     e_pt, _ = integrate.quad(
         lambda l: sigmoid(l) * stats.norm.pdf(l, L0, std), lo, hi
     )
-    return float(call - e_pt + K)
+    parity = call - e_pt + K
+    return float(max(0.0, max(intrinsic, parity)))
 
 
 # ── Binary (digital) option prices ────────────────────────────────────────────
 
 def binary_call_price(p0: float, K: float, sigma: float, tau: float) -> float:
     """P(p_T > K) under logit-normal: Phi(d) where d = (L0 - logit(K)) / (sigma*sqrt(tau))"""
+    p0s = safe_prob(p0)
     if tau <= 0:
-        return 1.0 if safe_prob(p0) > K else 0.0
-    d = (logit(p0) - logit(K)) / (clamp_sigma(sigma) * np.sqrt(tau))
+        return 1.0 if p0s > K else 0.0 if p0s < K else 0.5
+    sig_tau = clamp_sigma(sigma) * np.sqrt(tau)
+    if sig_tau < 1e-12:
+        return 1.0 if p0s > K else 0.0 if p0s < K else 0.5
+    d = (logit(p0) - logit(K)) / sig_tau
     return float(stats.norm.cdf(d))
 
 
@@ -250,19 +284,25 @@ def available_strikes(
     sigma: float,
     tau_days: int,
     n_std: float = 2.5,
+    min_strikes: int = 7,
 ) -> list[float]:
     """
-    Return only strikes within n_std logit-space standard deviations of current prob.
-    Always guarantees at least one strike (nearest to p0).
+    Return strikes within n_std logit-space standard deviations of current prob.
+    Guarantees at least min_strikes by widening the window or picking nearest.
     """
     L0      = logit(p0)
-    sigma_t = clamp_sigma(sigma) * np.sqrt(tau_days / 252.0)
-    L_lo    = L0 - n_std * sigma_t
-    L_hi    = L0 + n_std * sigma_t
+    sigma_t = clamp_sigma(sigma) * np.sqrt(tau_days / 365.0)
+    # Ensure a minimum logit-space range so short-dated/low-vol markets
+    # still show a meaningful chain
+    half_width = max(n_std * sigma_t, 0.8)
+    L_lo    = L0 - half_width
+    L_hi    = L0 + half_width
     valid   = [K for K in STRIKE_GRID if L_lo <= logit(K) <= L_hi]
 
-    if not valid:
-        valid = [min(STRIKE_GRID, key=lambda K: abs(K - p0))]
+    if len(valid) < min_strikes:
+        by_dist = sorted(STRIKE_GRID, key=lambda K: abs(logit(K) - L0))
+        valid = sorted(set(valid) | set(by_dist[:min_strikes]))
+
     return valid
 
 
@@ -290,7 +330,7 @@ def compute_chain(
     results = []
     for K in strikes:
         for tau_days in taus:
-            tau = tau_days / 252.0
+            tau = tau_days / 365.0
             call_g = greeks(p0, K, sigma, tau, N, "call")
             put_g  = greeks(p0, K, sigma, tau, N, "put")
             results.append({
@@ -303,6 +343,8 @@ def compute_chain(
                 "vega":       call_g["vega"],
                 "gamma":      call_g["gamma"],
                 "put_delta":  put_g["delta"],
+                "put_theta":  put_g["theta"],
+                "put_vega":   put_g["vega"],
             })
     return results
 
@@ -350,7 +392,7 @@ def implied_distribution(
     Returns {probs: [...], densities: [...]} for rendering the distribution curve.
     """
     L0  = logit(p0)
-    std = clamp_sigma(sigma) * np.sqrt(max(tau, 1 / 252))
+    std = clamp_sigma(sigma) * np.sqrt(max(tau, 1 / 365))
 
     # Sample uniformly in logit space, map back to prob space
     L_lo = L0 - 4 * std

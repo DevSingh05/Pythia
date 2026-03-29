@@ -50,7 +50,8 @@ export interface VolResult {
 }
 
 /**
- * Estimate annualised logit-space volatility from daily p(t) series.
+ * Estimate annualised logit-space volatility from consecutive p(t) samples.
+ * Annualises with √365 (calendar year; Polymarket resolves any day).
  *
  * @param probs     array of daily probabilities, chronological order
  * @param fallback  cross-market median sigma (used when data insufficient)
@@ -88,7 +89,7 @@ export function estimateVol(probs: number[], fallback: number = 0.30): VolResult
   // Winsorise then recompute
   const winsorised = winsorise(rawDiffs);
   const sigma_daily = stddev(winsorised);
-  let sigma_ann     = sigma_daily * Math.sqrt(252);
+  let sigma_ann     = sigma_daily * Math.sqrt(365);
 
   let source: VolSource = "estimated";
 

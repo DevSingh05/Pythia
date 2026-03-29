@@ -67,7 +67,7 @@ interface UsePriceHistoryState {
 
 export function usePriceHistory(
   tokenId: string,          // YES CLOB token_id (market.clobTokenId)
-  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d',
+  interval: '1d' | '7d' | '30d' = '7d',
   marketId?: string,        // integer market ID — only needed for custom backend
 ) {
   const [state, setState] = useState<UsePriceHistoryState>({

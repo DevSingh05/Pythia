@@ -9,47 +9,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { computeHistoricalVol } from '@/lib/pricing'
 
 const MDS   = process.env.MARKET_DATA_SERVICE_URL || ''
 const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polymarket.com'
 const CLOB  = 'https://clob.polymarket.com'
-
-function logit(p: number): number {
-  const c = Math.max(0.001, Math.min(0.999, p))
-  return Math.log(c / (1 - c))
-}
-
-/**
- * Compute annualised logit-space volatility from a price history series.
- * Mirrors the client-side computeHistoricalVol() in pricing.ts exactly so
- * every machine produces the same number for the same data.
- */
-function computeVol(history: { t: number; p: number }[]): number | null {
-  if (history.length < 5) return null
-
-  const logitPrices = history.map(pt => logit(pt.p))
-  const diffs: number[] = []
-  for (let i = 1; i < logitPrices.length; i++) {
-    diffs.push(logitPrices[i] - logitPrices[i - 1])
-  }
-
-  const sorted = [...diffs].sort((a, b) => a - b)
-  const lo = sorted[Math.floor(sorted.length * 0.01)]
-  const hi = sorted[Math.floor(sorted.length * 0.99)]
-  const clean = diffs.filter(d => d >= lo && d <= hi)
-  if (clean.length < 3) return null
-
-  const mean = clean.reduce((s, d) => s + d, 0) / clean.length
-  const variance = clean.reduce((s, d) => s + (d - mean) ** 2, 0) / (clean.length - 1)
-  const stdDaily = Math.sqrt(variance)
-
-  const avgTickDays =
-    (history[history.length - 1].t - history[0].t) / (history.length - 1) / 86_400_000
-  const ticksPerYear = avgTickDays > 0 ? 365 / avgTickDays : 252
-  const annual = stdDaily * Math.sqrt(ticksPerYear)
-
-  return Math.min(5.0, Math.max(0.05, annual))
-}
 
 export async function GET(
   _req: NextRequest,
@@ -96,12 +60,12 @@ export async function GET(
       )
       if (histRes.ok) {
         const raw = await histRes.json()
-        const history: { t: number; p: number }[] = (raw.history ?? []).map((pt: any) => ({
+        const history: { t: number; p: number }[] = (raw.history ?? []).map((pt: { t: number; p: string | number }) => ({
           t: pt.t,
-          p: parseFloat(pt.p),
+          p: typeof pt.p === 'string' ? parseFloat(pt.p) : pt.p,
         }))
-        const sigma = computeVol(history)
-        if (sigma) {
+        const sigma = computeHistoricalVol(history)
+        if (Number.isFinite(sigma)) {
           return NextResponse.json({ sigma, source: 'historical' })
         }
       }

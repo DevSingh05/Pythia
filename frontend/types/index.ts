@@ -31,7 +31,7 @@ export interface OptionContract {
   type: OptionType
   expiry: string
   daysToExpiry: number
-  premium: number       // in USDC cents (e.g. 0.08 = 8¢)
+  premium: number       // USDC per contract (e.g. 0.08 = $0.08)
   premiumChange: number
   premiumChangePct: number
   delta: number

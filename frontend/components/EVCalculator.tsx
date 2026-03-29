@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 /**
  * EVCalculator
@@ -7,20 +7,20 @@
  *
  * For each position, computes:
  *   EV = currentOptionValue - avgCostPaid  (per contract, and total)
- *   Breakeven Prob = minimum market probability at which EV turns positive
- *     (solved via binary search on vanillaCall/vanillaPut)
+ *   Breakeven Prob = market probability at which American mark equals avg cost
+ *     (binary search on americanOptionBinomial)
  *
  * Shows a color-coded POSITIVE / NEGATIVE EV badge per position.
  *
  * Extraction: requires @/lib/api (Position), @/lib/paperTrade (PaperOrder),
- *   @/lib/pricing (vanillaCall, vanillaPut), @/lib/utils (cn, fmtProb, fmtPremium),
+ *   @/lib/pricing (americanOptionBinomial), @/lib/utils (cn, fmtProb, fmtPremium),
  *   @/components/InfoTooltip.
  */
 
 import { useMemo } from 'react'
 import { Position } from '@/lib/api'
 import { PaperOrder, MarketSnapshot } from '@/lib/paperTrade'
-import { vanillaCall, vanillaPut } from '@/lib/pricing'
+import { americanOptionBinomial, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import InfoTooltip from '@/components/InfoTooltip'
 import { Calculator, TrendingUp, TrendingDown } from 'lucide-react'
@@ -58,9 +58,7 @@ function findBreakevenProb(
   maxIter = 40,
 ): number | null {
   const fn = (p: number) =>
-    type === 'call'
-      ? vanillaCall(p, strike, impliedVol, tau) - avgCost
-      : vanillaPut(p, strike, impliedVol, tau) - avgCost
+    americanOptionBinomial(p, strike, impliedVol, tau, AMERICAN_TREE_STEPS, type) - avgCost
 
   // Check if breakeven exists in range
   if (fn(0.01) * fn(0.99) > 0) return null
@@ -94,10 +92,15 @@ function computePositionEVs(
     const remainingDays = Math.max(0.1, (ref?.daysToExpiry ?? 7) - daysSinceFill)
     const tau = remainingDays / 365
 
-    // EV = current market value of option - what you paid for it
-    const currentValue = pos.type === 'call'
-      ? vanillaCall(currentProb, pos.strike, impliedVol, tau)
-      : vanillaPut(currentProb, pos.strike, impliedVol, tau)
+    // EV = current American mark - what you paid for it
+    const currentValue = americanOptionBinomial(
+      currentProb,
+      pos.strike,
+      impliedVol,
+      tau,
+      AMERICAN_TREE_STEPS,
+      pos.type,
+    )
 
     const sign = pos.side === 'long' ? 1 : -1
     const evPerContract = sign * (currentValue - pos.avgCost)
@@ -115,7 +118,7 @@ function EVRow({ ev }: { ev: PositionEV }) {
   const { position, evPerContract, evTotal, breakevenProb, currentProb } = ev
   const isPositive = evTotal > 0
   const shortTitle = position.marketTitle.length > 38
-    ? position.marketTitle.slice(0, 36) + 'ΓÇª'
+    ? `${position.marketTitle.slice(0, 36)}…`
     : position.marketTitle
 
   return (
@@ -131,7 +134,7 @@ function EVRow({ ev }: { ev: PositionEV }) {
             ? 'bg-green-muted text-green'
             : 'bg-red-muted text-red'
         )}>
-          {isPositive ? '+ Positive EV' : 'ΓêÆ Negative EV'}
+          {isPositive ? '+ Positive EV' : '\u2212 Negative EV'}
         </span>
       </div>
 
@@ -179,8 +182,8 @@ function EVRow({ ev }: { ev: PositionEV }) {
             {breakevenProb !== null && (
               <span className={cn('text-[9px] ml-1', currentProb > breakevenProb ? 'text-green' : 'text-red')}>
                 {currentProb > breakevenProb
-                  ? `Γû▓ ${((currentProb - breakevenProb) * 100).toFixed(1)}pp above`
-                  : `Γû╝ ${((breakevenProb - currentProb) * 100).toFixed(1)}pp below`
+                  ? `\u25B2 ${((currentProb - breakevenProb) * 100).toFixed(1)}pp above`
+                  : `\u25BC ${((breakevenProb - currentProb) * 100).toFixed(1)}pp below`
                 }
               </span>
             )}

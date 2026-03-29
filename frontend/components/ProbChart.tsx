@@ -6,6 +6,14 @@ import {
 } from 'recharts'
 import { fetchPriceHistoryFast, PricePoint } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import {
+  type ChartIntervalId,
+  filterByChartInterval,
+  intervalsAvailableForSpan,
+  defaultChartInterval,
+  CHART_INTERVAL_LABEL,
+} from '@/lib/chartTimeRanges'
+import { downsampleProbTimeBiased } from '@/lib/chartSampling'
 
 /** Colors for multi-outcome chart lines */
 const LINE_COLORS = [
@@ -21,7 +29,7 @@ const LINE_COLORS = [
   '#6366f1', // indigo
 ]
 
-interface OutcomeInfo {
+export interface ProbChartOutcomeInfo {
   label: string
   tokenId: string
   prob: number
@@ -31,21 +39,12 @@ interface OutcomeInfo {
 interface ProbChartProps {
   tokenId?: string
   currentProb?: number
-  outcomes?: OutcomeInfo[]
+  outcomes?: ProbChartOutcomeInfo[]
   activeMarketId?: string
+  /** If set, only this outcome’s line is fetched and drawn (e.g. Spain’s YES in a FIFA event). */
+  isolateTokenId?: string
   className?: string
 }
-
-type IntervalKey = '1h' | '6h' | '1d' | '7d' | '30d' | 'all'
-
-const INTERVALS: { label: string; value: IntervalKey }[] = [
-  { label: '1H',  value: '1h'  },
-  { label: '6H',  value: '6h'  },
-  { label: '1D',  value: '1d'  },
-  { label: '1W',  value: '7d'  },
-  { label: '1M',  value: '30d' },
-  { label: 'ALL', value: 'all' },
-]
 
 interface MergedPoint {
   t: number
@@ -92,17 +91,32 @@ export default function ProbChart({
   currentProb,
   outcomes,
   activeMarketId,
+  isolateTokenId,
   className,
 }: ProbChartProps) {
-  const [interval, setInterval] = useState<IntervalKey>('all')
+  const [interval, setInterval] = useState<ChartIntervalId>('all')
   const [histories, setHistories] = useState<Map<number, PricePoint[]>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const effectiveOutcomes = useMemo(() => {
-    if (outcomes && outcomes.length > 0) return outcomes
-    if (tokenId) return [{ label: 'YES', tokenId, prob: currentProb ?? 0.5, marketId: '' }]
-    return []
-  }, [outcomes, tokenId, currentProb])
+    let base: ProbChartOutcomeInfo[]
+    if (outcomes && outcomes.length > 0) base = outcomes
+    else if (tokenId) base = [{ label: 'YES', tokenId, prob: currentProb ?? 0.5, marketId: '' }]
+    else return []
+    if (isolateTokenId) {
+      const one = base.filter(o => o.tokenId === isolateTokenId)
+      if (one.length > 0) return one
+      return [
+        {
+          label: 'This outcome',
+          tokenId: isolateTokenId,
+          prob: currentProb ?? 0.5,
+          marketId: activeMarketId ?? '',
+        },
+      ]
+    }
+    return base
+  }, [outcomes, tokenId, currentProb, isolateTokenId, activeMarketId])
 
   // Top 4 outcomes by probability
   const displayOutcomes = useMemo(() => {
@@ -134,48 +148,42 @@ export default function ProbChart({
     })
   }, [displayTokenKey])
 
-  // Client-side interval filtering
-  const filterByInterval = (pts: PricePoint[], iv: IntervalKey): PricePoint[] => {
-    if (iv === 'all') return pts
-    const now = Date.now()
-    const ms: Record<string, number> = {
-      '1h': 3600_000,
-      '6h': 6 * 3600_000,
-      '1d': 86_400_000,
-      '7d': 7 * 86_400_000,
-      '30d': 30 * 86_400_000,
+  const dataExtent = useMemo(() => {
+    let minT = Infinity
+    let maxT = -Infinity
+    for (const pts of histories.values()) {
+      for (const p of pts) {
+        minT = Math.min(minT, p.t)
+        maxT = Math.max(maxT, p.t)
+      }
     }
-    const cutoff = now - (ms[iv] ?? 86_400_000)
-    return pts.filter(p => p.t >= cutoff)
-  }
+    if (!Number.isFinite(minT)) return null
+    return { minT, maxT }
+  }, [histories])
 
-  // Downsample to keep chart performant
-  const downsample = (pts: PricePoint[], maxPoints: number): PricePoint[] => {
-    if (pts.length <= maxPoints) return pts
-    const step = pts.length / maxPoints
-    const result: PricePoint[] = []
-    for (let i = 0; i < maxPoints; i++) {
-      result.push(pts[Math.floor(i * step)])
-    }
-    // Always include the last point
-    if (result[result.length - 1] !== pts[pts.length - 1]) {
-      result.push(pts[pts.length - 1])
-    }
-    return result
-  }
+  const availableIntervals = useMemo(() => {
+    if (!dataExtent) return [] as ChartIntervalId[]
+    return intervalsAvailableForSpan(dataExtent.minT, dataExtent.maxT)
+  }, [dataExtent])
+
+  useEffect(() => {
+    if (!dataExtent) return
+    const span = dataExtent.maxT - dataExtent.minT
+    const avail = intervalsAvailableForSpan(dataExtent.minT, dataExtent.maxT)
+    setInterval(iv => (avail.includes(iv) ? iv : defaultChartInterval(span)))
+  }, [dataExtent?.minT, dataExtent?.maxT])
 
   // Merge all outcome histories into unified time-series
   const { mergedData, yMin, yMax } = useMemo(() => {
     const timeSet = new Set<number>()
     const filteredHistories: PricePoint[][] = []
 
-    // Target points based on interval
-    const targetPoints = interval === 'all' ? 400 : interval === '30d' ? 500 : 300
+    const targetPoints = interval === 'all' ? 520 : interval === '30d' ? 440 : 300
 
     displayOutcomes.forEach((_, i) => {
       const raw = histories.get(i) ?? []
-      const filtered = filterByInterval(raw, interval)
-      const sampled = downsample(filtered, targetPoints)
+      const filtered = filterByChartInterval(raw, interval)
+      const sampled = downsampleProbTimeBiased(filtered, targetPoints)
       filteredHistories.push(sampled)
       sampled.forEach(pt => timeSet.add(pt.t))
     })
@@ -227,7 +235,7 @@ export default function ProbChart({
     })
 
     const range = maxP - minP
-    const pad = Math.max(range * 0.1, 0.02)
+    const pad = Math.max(range * 0.14, 0.025, range < 0.04 ? 0.018 : 0)
     return {
       mergedData: validMerged,
       yMin: Math.max(0, minP - pad),
@@ -237,11 +245,8 @@ export default function ProbChart({
 
   const tickFormatter = (v: number) => {
     const d = new Date(v)
-    if (interval === '1h' || interval === '6h') {
-      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    }
     if (interval === '1d') {
-      return d.toLocaleTimeString('en-US', { hour: 'numeric' })
+      return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
     }
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
@@ -286,19 +291,18 @@ export default function ProbChart({
           <span className="text-xs text-zinc-500 uppercase tracking-wider font-medium">YES probability</span>
         )}
 
-        <div className="flex gap-0.5 shrink-0">
-          {INTERVALS.map(i => (
+        <div className="flex gap-0.5 shrink-0 flex-wrap justify-end">
+          {availableIntervals.map(id => (
             <button
-              key={i.value}
-              onClick={() => setInterval(i.value)}
+              key={id}
+              type="button"
+              onClick={() => setInterval(id)}
               className={cn(
                 'px-2 py-1 text-xs rounded font-medium transition-colors',
-                interval === i.value
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                interval === id ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300',
               )}
             >
-              {i.label}
+              {CHART_INTERVAL_LABEL[id]}
             </button>
           ))}
         </div>
@@ -341,8 +345,9 @@ export default function ProbChart({
               return (
                 <Line
                   key={i}
-                  type="monotone"
+                  type="linear"
                   dataKey={`outcome_${i}`}
+                  isAnimationActive={false}
                   stroke={LINE_COLORS[i % LINE_COLORS.length]}
                   strokeWidth={isActive ? 2.5 : 1.5}
                   strokeOpacity={isActive || !activeMarketId ? 1 : 0.6}

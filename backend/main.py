@@ -141,7 +141,7 @@ def health():
 def price_contract(req: PriceRequest):
     """Price a single American option contract + compute Greeks."""
     t0  = time.perf_counter()
-    tau = req.tau_days / 252.0
+    tau = req.tau_days / 365.0
 
     g = greeks(req.p0, req.strike, req.sigma, tau, req.n_steps, req.kind)
     g["tau_days"] = req.tau_days
@@ -176,7 +176,7 @@ def exercise_boundary(req: BoundaryRequest):
     Used in Pro View to render p* vs time-to-expiry.
     """
     t0  = time.perf_counter()
-    tau = req.tau_days / 252.0
+    tau = req.tau_days / 365.0
 
     boundary = early_exercise_boundary(
         req.K, req.sigma, tau, req.kind, req.n_steps, req.steps
@@ -202,7 +202,7 @@ def prob_distribution(req: DistributionRequest):
     Return the logit-normal terminal probability distribution.
     Used to render the implied distribution curve above the chain.
     """
-    tau = req.tau_days / 252.0
+    tau = req.tau_days / 365.0
     return implied_distribution(req.p0, req.sigma, tau, req.steps)
 
 
@@ -216,7 +216,7 @@ def strikes_available(req: StrikesRequest):
 @app.post("/vanilla")
 def vanilla_prices(req: PriceRequest):
     """European vanilla call/put prices for reference (quadrature method)."""
-    tau = req.tau_days / 252.0
+    tau = req.tau_days / 365.0
     if req.kind == "call":
         price = vanilla_call_price(req.p0, req.strike, req.sigma, tau)
     else:
@@ -227,7 +227,7 @@ def vanilla_prices(req: PriceRequest):
 @app.post("/binary")
 def binary_prices(req: PriceRequest):
     """Digital (binary) option prices — P(p_T > K) for call, P(p_T < K) for put."""
-    tau = req.tau_days / 252.0
+    tau = req.tau_days / 365.0
     if req.kind == "call":
         price = binary_call_price(req.p0, req.strike, req.sigma, tau)
     else:
