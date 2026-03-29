@@ -59,7 +59,7 @@ function computeOrderPnl(
 export default function OrderHistory({ orders, marketPrices }: OrderHistoryProps) {
   if (orders.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-xl p-8 text-center">
+      <div className="bg-card border border-border  p-8 text-center">
         <p className="text-sm text-muted">No orders yet.</p>
         <p className="text-xs text-muted/60 mt-1">Place your first paper trade from a market page.</p>
       </div>
@@ -69,7 +69,7 @@ export default function OrderHistory({ orders, marketPrices }: OrderHistoryProps
   const sorted = [...orders].sort((a, b) => b.timestamp - a.timestamp)
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border  overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="text-xs text-muted uppercase tracking-wider font-medium">Trade History</div>
@@ -126,7 +126,7 @@ export default function OrderHistory({ orders, marketPrices }: OrderHistoryProps
                   {/* Type */}
                   <td className="px-3 py-2.5">
                     <span className={cn(
-                      'font-mono px-1.5 py-0.5 rounded text-[10px] font-bold',
+                      'font-mono px-1.5 py-0.5 text-[10px] font-bold',
                       order.type === 'call' ? 'text-green bg-green-muted' : 'text-red bg-red-muted'
                     )}>
                       {order.type.toUpperCase()}

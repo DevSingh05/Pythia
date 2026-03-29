@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { fetchPriceHistoryFast, type PricePoint, type Position } from '@/lib/api'
+import { fetchMarket, fetchPriceHistoryFast, type PricePoint, type Position } from '@/lib/api'
 import BacktestChart from './BacktestChart'
 import type { PaperOrder } from '@/lib/paperTrade'
 import { FlaskConical, ChevronDown } from 'lucide-react'
@@ -71,32 +71,40 @@ export default function PortfolioBacktest({ positions, orders, className }: Port
 
   const selected = options.find(o => o.key === selectedKey)
 
-  // Fetch history when selection changes
+  // Fetch history when selection changes — need to resolve clobTokenId first
   useEffect(() => {
     if (!selected) return
 
-    // Find the clobTokenId from any matching order
-    const matchingOrder = orders.find(o => o.marketId === selected.marketId)
-    if (!matchingOrder) return
-
     let cancelled = false
     setLoading(true)
-    fetchPriceHistoryFast(selected.marketId).then(pts => {
-      if (!cancelled) {
-        setHistory(pts)
-        setLoading(false)
-      }
-    }).catch(() => {
-      if (!cancelled) setLoading(false)
-    })
+    setHistory([])
+
+    // Resolve the market to get clobTokenId, then fetch price history
+    fetchMarket(selected.marketId)
+      .then(market => {
+        if (cancelled || !market.clobTokenId) {
+          setLoading(false)
+          return
+        }
+        return fetchPriceHistoryFast(market.clobTokenId)
+      })
+      .then(pts => {
+        if (!cancelled && pts) {
+          setHistory(pts)
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
     return () => { cancelled = true }
-  }, [selected?.marketId, orders])
+  }, [selected?.marketId])
 
   if (options.length === 0) return null
 
   return (
-    <div className={cn('bg-card border border-border rounded-xl overflow-hidden', className)}>
+    <div className={cn('bg-card border border-border  overflow-hidden', className)}>
       {/* Collapsible header */}
       <button
         type="button"
@@ -123,7 +131,7 @@ export default function PortfolioBacktest({ positions, orders, className }: Port
             <select
               value={selectedKey ?? ''}
               onChange={e => setSelectedKey(e.target.value)}
-              className="w-full bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500"
+              className="w-full bg-zinc-800/60 border border-zinc-700  px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500"
             >
               {options.map(o => (
                 <option key={o.key} value={o.key}>{o.label}</option>

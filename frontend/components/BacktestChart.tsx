@@ -159,14 +159,19 @@ export default function BacktestChart({
           <span>Entry date</span>
           <span className="font-mono text-zinc-300">{entryLabel}</span>
         </div>
-        <input
-          type="range"
-          min={oldestT}
-          max={newestT - 86_400_000} // at least 1 day before latest
-          value={entryT}
-          onChange={e => setEntryT(Number(e.target.value))}
-          className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-violet-500"
-        />
+        <div className="relative h-[14px]">
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-[6px] bg-zinc-800" />
+          <div className="absolute top-1/2 -translate-y-1/2 left-0 h-[6px] bg-violet-600"
+            style={{ width: `${((entryT - oldestT) / Math.max(1, newestT - 86_400_000 - oldestT)) * 100}%` }} />
+          <input
+            type="range"
+            min={oldestT}
+            max={newestT - 86_400_000}
+            value={entryT}
+            onChange={e => setEntryT(Number(e.target.value))}
+            className="absolute inset-0 w-full appearance-none cursor-pointer bg-transparent slider-grip"
+          />
+        </div>
         <div className="flex justify-between text-[9px] text-zinc-600 font-mono">
           <span>{new Date(oldestT).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
           <span>{new Date(newestT).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
