@@ -18,25 +18,31 @@ The platform is currently **paper trading only** — no real money, full analyti
 
 ## Architecture Overview
 
-```
-┌──────────────┐     ┌─────────────────────┐     ┌────────────────────┐
-│  Next.js 16  │────▶│  FastAPI Pricing     │     │  Bun Market Data   │
-│  Frontend    │     │  (Port 8000)         │     │  Service (Port 3001)│
-│  (Port 3000) │────▶│  Binomial tree       │     │  Polling + caching  │
-└──────────────┘     │  Greeks calc         │     │  SSE streams        │
-        │            └─────────────────────┘     └────────────────────┘
-        │                                                   │
-        ▼                                                   ▼
-┌──────────────┐                                  ┌────────────────────┐
-│  Supabase    │                                  │  Neon PostgreSQL   │
-│  Auth + RLS  │                                  │  Market data +     │
-│  Orders DB   │                                  │  Prob history      │
-└──────────────┘                                  └────────────────────┘
-                                                           │
-                                                  ┌────────────────────┐
-                                                  │  Upstash Redis     │
-                                                  │  Volatility cache  │
-                                                  └────────────────────┘
+```mermaid
+graph TD
+    FE["**Next.js 16 Frontend**\nPort 3000\nUI · API routes · Auth"]
+
+    PRICING["**FastAPI Pricing Service**\nPort 8000 · Python 3.12\nBinomial tree · Greeks"]
+
+    MDS["**Bun Market Data Service**\nPort 3001\nPolymarket polling · SSE streams"]
+
+    SUPA["**Supabase**\nAuth + RLS\nPaper trading orders"]
+
+    NEON["**Neon PostgreSQL**\nMarket metadata\nProbability history"]
+
+    REDIS["**Upstash Redis**\nVolatility cache\n1-hour TTL"]
+
+    POLY["**Polymarket**\nGamma API · CLOB API\nLive probability prices"]
+
+    FE -->|"POST /price\nPOST /chain"| PRICING
+    FE -->|"GET /markets\nGET /vol\nSSE /prob"| MDS
+    FE -->|"Auth tokens\nOrder CRUD"| SUPA
+
+    MDS -->|"Stores ticks"| NEON
+    MDS -->|"Caches vol"| REDIS
+    MDS -->|"Polls prices"| POLY
+
+    PRICING -->|"Fetches live prob\n(fallback)"| MDS
 ```
 
 Three independent backend services:
@@ -518,15 +524,3 @@ npm run dev
 **Supabase RLS for order isolation** — Row-level security at the database layer means a bug in application code cannot leak one user's orders to another. The policy is enforced by Postgres, not the API.
 
 **Serverless infrastructure** — Neon and Upstash scale to zero, eliminating idle costs for a project at this stage. Neither requires connection pooling configuration for typical load.
-
----
-
-## Roadmap
-
-- [ ] Real-money settlement via Polymarket CLOB (execute options as conditional orders)
-- [ ] Multi-leg order entry (spreads, straddles, strangles)
-- [ ] Implied vol surface across all active markets
-- [ ] WebSocket-based options chain streaming (replace polling)
-- [ ] Mobile-responsive layout
-- [ ] Strategy builder with payoff + Greeks aggregation
-- [ ] Notification triggers (e.g., "alert me if Delta crosses 0.5")
