@@ -20,8 +20,13 @@ SIGMA_FLOOR = 0.05
 SIGMA_CAP = 5.0
 PROB_CLAMP = (1e-6, 1 - 1e-6)
 
-STRIKE_GRID = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]
-EXPIRY_GRID = [7, 14, 21, 30]  # days
+STRIKE_GRID = [
+    0.03, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25,
+    0.28, 0.30, 0.33, 0.35, 0.38, 0.40, 0.42, 0.45, 0.48, 0.50,
+    0.52, 0.55, 0.58, 0.60, 0.62, 0.65, 0.68, 0.70, 0.72, 0.75,
+    0.78, 0.80, 0.82, 0.85, 0.88, 0.90, 0.92, 0.95, 0.97,
+]
+EXPIRY_GRID = [3, 7, 14, 30]  # days
 
 # ── Core transforms ────────────────────────────────────────────────────────────
 
@@ -132,7 +137,27 @@ def greeks(
     delta = (price(p0 + dp, sigma, tau) - price(p0 - dp, sigma, tau)) / (2 * dp)
     vega  = (price(p0, sigma + ds, tau) - price(p0, sigma - ds, tau)) / (2 * ds)
     theta = (price(p0, sigma, tau - dt) - base) / dt   # $/day, negative
-    gamma = (price(p0 + dp, sigma, tau) - 2 * base + price(p0 - dp, sigma, tau)) / (dp ** 2)
+
+    # Gamma: d²V/dp² scaled to "delta change per 1pp move"
+    #
+    # Raw d²V/dp² gives values of ~25-30 at ATM because the underlying
+    # range is [0,1] — curvature is inherently ~100x stock-world gamma.
+    # d²V/dL² (logit-space) goes negative for deep ITM due to sigmoid''(L)<0,
+    # which is mathematically correct but misleading (long call = negative gamma?).
+    #
+    # Solution: compute probability-space gamma, then normalise to per-pp.
+    # Γ_display = d²V/dp² × 0.01  →  "if prob moves 1pp, delta changes by Γ"
+    #
+    # Properties:
+    #   - Always non-negative for long vanilla options  ✓
+    #   - Peaks ATM (~0.25), tapers to ~0 deep ITM/OTM  ✓
+    #   - Comparable magnitude to stock-world gamma      ✓
+    #   - Consistent between backend and frontend        ✓
+    gp = 0.005   # half-pp bump for stable second derivative
+    p_up = safe_prob(p0 + gp)
+    p_dn = safe_prob(p0 - gp)
+    raw_gamma = (price(p_up, sigma, tau) - 2 * base + price(p_dn, sigma, tau)) / (gp ** 2)
+    gamma = raw_gamma * 0.01  # normalise to delta-change per 1pp
 
     return {
         "price": round(base, 6),
@@ -250,19 +275,25 @@ def available_strikes(
     sigma: float,
     tau_days: int,
     n_std: float = 2.5,
+    min_strikes: int = 7,
 ) -> list[float]:
     """
-    Return only strikes within n_std logit-space standard deviations of current prob.
-    Always guarantees at least one strike (nearest to p0).
+    Return strikes within n_std logit-space standard deviations of current prob.
+    Guarantees at least min_strikes by widening the window or picking nearest.
     """
     L0      = logit(p0)
     sigma_t = clamp_sigma(sigma) * np.sqrt(tau_days / 252.0)
-    L_lo    = L0 - n_std * sigma_t
-    L_hi    = L0 + n_std * sigma_t
+    # Ensure a minimum logit-space range so short-dated/low-vol markets
+    # still show a meaningful chain
+    half_width = max(n_std * sigma_t, 0.8)
+    L_lo    = L0 - half_width
+    L_hi    = L0 + half_width
     valid   = [K for K in STRIKE_GRID if L_lo <= logit(K) <= L_hi]
 
-    if not valid:
-        valid = [min(STRIKE_GRID, key=lambda K: abs(K - p0))]
+    if len(valid) < min_strikes:
+        by_dist = sorted(STRIKE_GRID, key=lambda K: abs(logit(K) - L0))
+        valid = sorted(set(valid) | set(by_dist[:min_strikes]))
+
     return valid
 
 

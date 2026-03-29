@@ -5,7 +5,7 @@
  */
 
 import { Position } from '@/lib/api'
-import { vanillaCall, vanillaPut, callDelta, putDelta, callTheta, gamma as calcGamma, callVega } from '@/lib/pricing'
+import { vanillaCall, vanillaPut, callDelta, putDelta, callTheta, callGamma, putGamma, callVega } from '@/lib/pricing'
 
 // ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
@@ -282,7 +282,8 @@ export function computePortfolioStats(
     const tau = remainingDays / 365
 
     netDelta += pos.delta * pos.quantity * sign
-    netGamma += calcGamma(p0, pos.strike, sigma, tau) * pos.quantity * sign
+    const gammaFn = pos.type === 'put' ? putGamma : callGamma
+    netGamma += gammaFn(p0, pos.strike, sigma, tau) * pos.quantity * sign
     netTheta += pos.theta * pos.quantity * sign
     netVega += callVega(p0, pos.strike, sigma, tau) * pos.quantity * sign
   }
