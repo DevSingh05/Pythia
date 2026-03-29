@@ -5,7 +5,7 @@ import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, OptionsChainResponse, placeOrder } from '@/lib/api'
 import type { ProbChartOutcomeInfo } from '@/components/ProbChart'
 import PreTradeAnalysis from '@/components/PreTradeAnalysis'
-import PayoffChart, { computePayoffMetrics, fmtCents } from './PayoffChart'
+import PayoffChart, { fmtCents } from './PayoffChart'
 import {
   Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown, Loader2,
   ChevronRight, LineChart,
@@ -77,6 +77,8 @@ export default function TradePanel({
 
   const isCall = option.type === 'call'
   const totalCost = option.premium * quantity
+  /** Premium/loss display multiplier: 1 lot = 1,000 units at $1 face. */
+  const LOT = 1000
   const noExecutablePremium =
     !Number.isFinite(option.premium) || option.premium <= 0
 
@@ -230,7 +232,9 @@ export default function TradePanel({
                 demoActive && 'opacity-50 cursor-not-allowed',
                 side === s
                   ? s === 'buy' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                  : 'text-zinc-400 hover:text-zinc-200 bg-transparent'
+                  : s === 'buy'
+                    ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                    : 'text-red-400 hover:text-red-300 bg-red-500/[0.08] hover:bg-red-500/15'
               )}
             >
               {s}
@@ -254,39 +258,18 @@ export default function TradePanel({
           </div>
         )}
 
-        {!isDemoFilling && !isDemoProcessing && (() => {
-          const { maxPnl, minPnl, breakevenProb, beAnalytic } = computePayoffMetrics(option, side, quantity)
-          return (
-            <div className="grid grid-cols-3 gap-1.5">
-              <div className="rounded-lg bg-red-500/[0.07] border border-red-500/20 p-2.5 text-center">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Loss</div>
-                <div className="text-sm font-mono font-bold text-red-400">{fmtCents(minPnl)}</div>
-              </div>
-              <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/40 p-2.5 text-center">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Breakeven</div>
-                <div className="text-sm font-mono font-bold text-amber-400">
-                  {beAnalytic != null ? `${(breakevenProb * 100).toFixed(1)}%` : '—'}
-                </div>
-              </div>
-              <div className="rounded-lg bg-emerald-500/[0.07] border border-emerald-500/20 p-2.5 text-center">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
-                <div className="text-sm font-mono font-bold text-emerald-400">{fmtCents(maxPnl)}</div>
-              </div>
-            </div>
-          )
-        })()}
-
         <PayoffChart
           option={option}
           side={side}
           quantity={quantity}
           currentProb={market.currentProb}
+          lotSize={LOT}
         />
 
         {!isDemoFilling && !isDemoProcessing && (
           <div className="flex items-center justify-between px-1">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / contract</span>
-            <span className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</span>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / lot <span className="text-zinc-600 normal-case">(×1,000 units)</span></span>
+            <span className="text-sm font-mono font-semibold text-zinc-100">${(option.premium * LOT).toFixed(2)}</span>
           </div>
         )}
 
@@ -318,7 +301,7 @@ export default function TradePanel({
             </button>
             <div className="w-px h-4 bg-zinc-700 mx-1" />
             <span className={cn('text-sm font-mono tabular-nums font-medium', side === 'buy' ? 'text-red-400' : 'text-emerald-400')}>
-              {side === 'buy' ? '−' : '+'}{fmtPremium(totalCost)}
+              {side === 'buy' ? '−' : '+'}${(totalCost * LOT).toFixed(2)}
             </span>
           </div>
         </div>
@@ -405,7 +388,7 @@ export default function TradePanel({
                 Processing…
               </span>
             ) : (
-              `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`
+              `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}× ` : ''}${option.type.toUpperCase()} — $${(totalCost * LOT).toFixed(2)}`
             )}
           </StarButton>
         ) : (

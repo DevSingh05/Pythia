@@ -10,6 +10,7 @@ import PnlChart from '@/components/PnlChart'
 import ScenarioAnalysis from '@/components/ScenarioAnalysis'
 import PnlBreakdown from '@/components/PnlBreakdown'
 import EVCalculator from '@/components/EVCalculator'
+import PortfolioBacktest from '@/components/PortfolioBacktest'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
 import { fetchMarket, fetchOptionsChain, fetchAmericanPrice, Position } from '@/lib/api'
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
@@ -212,6 +213,11 @@ export default function PortfolioPage() {
             </div>
           </div>
         </div>
+
+        {/* Backtest simulator */}
+        {hydrated && positions.length > 0 && (
+          <PortfolioBacktest positions={positions} orders={orders} />
+        )}
 
         {/* P&L breakdown */}
         {hydrated && positions.length > 0 && (
