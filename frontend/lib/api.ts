@@ -16,9 +16,12 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  // Destructure headers out of options so they can be merged without being
+  // overwritten when the rest of options is spread.
+  const { headers: extraHeaders, ...rest } = options ?? {}
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
+    ...rest,
   })
   if (!res.ok) {
     let msg = `API error ${res.status}: ${res.statusText}`
@@ -322,12 +325,11 @@ export interface PlaceOrderResponse {
   txHash?: string
 }
 
-export async function placeOrder(order: PlaceOrderRequest): Promise<PlaceOrderResponse> {
-  // With a backend: POST to backend which handles CLOB signing
-  // Without a backend: POST to local Next.js API route which adds L2 headers
+export async function placeOrder(order: PlaceOrderRequest, accessToken?: string): Promise<PlaceOrderResponse> {
   const endpoint = API_BASE ? `${API_BASE}/orders` : '/api/orders'
   return apiFetch<PlaceOrderResponse>(endpoint, {
     method: 'POST',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     body: JSON.stringify(order),
   })
 }

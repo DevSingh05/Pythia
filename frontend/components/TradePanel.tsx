@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
 import PayoffChart from './PayoffChart'
-import { Minus, Plus, AlertCircle, LogIn } from 'lucide-react'
+import { Minus, Plus, AlertCircle, LogIn, FlaskConical } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
 
@@ -17,7 +17,7 @@ interface TradePanelProps {
 }
 
 export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {
-  const { user } = useAuth()
+  const { user, getToken } = useAuth()
   const [showAuth, setShowAuth] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [submitted, setSubmitted] = useState(false)
@@ -41,15 +41,20 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
     setLoading(true)
     setOrderError(null)
     try {
-      await placeOrder({
-        marketId: market.id,
-        strike: option.strike,
-        type: option.type,
-        expiry: option.expiry,
-        side,
-        quantity,
-        walletAddress: '', // TODO: pass connected wallet address
-      })
+      const token = await getToken()
+      await placeOrder(
+        {
+          marketId: market.id,
+          strike: option.strike,
+          type: option.type,
+          expiry: option.expiry,
+          side,
+          quantity,
+          limitPrice: option.premium,
+          walletAddress: '',
+        },
+        token ?? '',
+      )
       setSubmitted(true)
     } catch (e) {
       setOrderError((e as Error).message)
@@ -78,6 +83,12 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
   return (
     <>
     <div className={cn('rounded-lg bg-card border border-border overflow-hidden', className)}>
+      {/* Paper-trading notice */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-[10px] font-medium">
+        <FlaskConical className="w-3 h-3 shrink-0" />
+        Paper Trading — orders are simulated and tracked in your account
+      </div>
+
       {/* Header */}
       <div className="flex items-center px-3 py-2.5 border-b border-border gap-3">
         <div className="flex rounded-md overflow-hidden border border-border text-xs">
