@@ -18,7 +18,6 @@ const OracleBackground = lazy(() =>
 // tag ids match Polymarket tag labels (case-insensitive substring match in proxy)
 const CATEGORIES = [
   { id: '', label: 'All' },
-  { id: 'Politics', label: 'Politics' },
   { id: 'Crypto', label: 'Crypto' },
   { id: 'Economics', label: 'Economics' },
   { id: 'Sports', label: 'Sports' },
@@ -216,7 +215,7 @@ export default function HomePage() {
         {/* Error */}
         {error && (
           <div className="rounded-md bg-red-muted border border-red/20 p-3.5 text-sm text-red">
-            Failed to load markets — {error}
+            Failed to load markets: {error}
           </div>
         )}
 
@@ -249,7 +248,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             {[
               { step: '01', title: 'Pick a market', desc: 'Any active Polymarket contract becomes your underlying. The YES% is a live probability price.' },
-              { step: '02', title: 'Choose a strike', desc: 'Pick a probability level — 30%, 50%, 70%. Your option pays off if the market moves through your strike.' },
+              { step: '02', title: 'Choose a strike', desc: 'Pick a probability level: 30%, 50%, 70%. Your option pays off if the market moves through your strike.' },
               { step: '03', title: 'Review the chain', desc: 'See the full options chain across expiries. IV, Greeks, breakeven all computed in real time.' },
               { step: '04', title: 'Trade with structure', desc: 'Defined max loss, live P&L curve. Know your risk before you enter.' },
             ].map(({ step, title, desc }) => (
@@ -264,7 +263,7 @@ export default function HomePage() {
       </div>
 
       <footer className="border-t border-border mt-12 py-6 text-center text-xs text-muted">
-        Pythia · Options on prediction market probabilities
+        Pythia - Options on prediction market probabilities
       </footer>
     </div>
   )

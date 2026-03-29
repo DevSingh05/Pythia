@@ -198,9 +198,9 @@ export default function OptionHistoryChart({
           </span>
         </div>
         <p className="text-[10px] text-zinc-500 leading-relaxed">
-          {option.type.toUpperCase()} @ {fmtProb(option.strike)} · {option.expiry} — repriced from{' '}
+          {option.type.toUpperCase()} @ {fmtProb(option.strike)} / {option.expiry} - repriced from{' '}
           <span className="text-zinc-400">{outcomeLabel}</span> YES% with the same tenor as the chain (
-          {option.daysToExpiry}d → τ = {(tauYears * 365).toFixed(1)}d, σ ≈ {(sigma * 100).toFixed(1)}%). Right edge
+          {option.daysToExpiry}d, tau = {(tauYears * 365).toFixed(1)}d, vol ~ {(sigma * 100).toFixed(1)}%). Right edge
           matches the quoted premium. Not exchange tape.
         </p>
       </div>

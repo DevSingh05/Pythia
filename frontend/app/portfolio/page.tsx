@@ -205,7 +205,7 @@ export default function PortfolioPage() {
                     href="/"
                     className="text-[10px] text-accent hover:underline"
                   >
-                    Browse markets →
+                    Browse markets
                   </Link>
                 </div>
               )}

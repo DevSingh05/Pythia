@@ -168,7 +168,7 @@ export default function DemoOrderAnimation({ demoStep, onClose }: DemoOrderAnima
                 textTransform: 'uppercase',
               }}
             >
-              Routing order…
+              Routing order...
             </span>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function DemoOrderAnimation({ demoStep, onClose }: DemoOrderAnima
             }}
           >
             <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em' }}>
-              DEMO — paper trade only
+              DEMO - paper trade only
             </span>
             <span
               style={{

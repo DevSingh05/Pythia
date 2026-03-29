@@ -178,7 +178,7 @@ export default function PnlBreakdown({ positions, orders, marketPrices }: PnlBre
         <BarChart2 className="w-3.5 h-3.5 text-accent" />
         <span className="text-xs text-muted uppercase tracking-wider font-medium">P&L Breakdown</span>
         <InfoTooltip
-          explanation="Shows where your profits and losses are coming from — split into market direction, time decay, and residual factors."
+          explanation="Shows where your profits and losses are coming from, split into market direction, time decay, and residual factors."
           side="right"
         />
       </div>
@@ -196,15 +196,15 @@ export default function PnlBreakdown({ positions, orders, marketPrices }: PnlBre
           <div className="flex gap-2">
             <AttributionCard
               icon={TrendingUp}
-              label="Directional ╬ö"
+              label="Directional"
               tooltip="How much of your P&L came from the market probability moving your way since entry. Calculated as Delta × (Current Prob − Fill Prob) × Quantity."
               value={attribution.directional}
               iconColor="text-accent"
             />
             <AttributionCard
               icon={Clock}
-              label="Time Decay ╬ÿ"
-              tooltip="The cumulative theta (daily decay) cost since you entered. Long options lose value each day — this shows the total daily cost accumulated so far."
+              label="Time Decay"
+              tooltip="The cumulative theta (daily decay) cost since you entered. Long options lose value each day - this shows the total daily cost accumulated so far."
               value={attribution.timeDecay}
               iconColor="text-amber-400"
             />
@@ -219,7 +219,7 @@ export default function PnlBreakdown({ positions, orders, marketPrices }: PnlBre
           {/* Attribution note when no live prices */}
           {marketPrices.size === 0 && (
             <p className="text-[10px] text-muted/50 mt-2">
-              Directional attribution requires live prices — hit Refresh to load them.
+              Directional attribution requires live prices. Hit Refresh to load them.
             </p>
           )}
         </div>

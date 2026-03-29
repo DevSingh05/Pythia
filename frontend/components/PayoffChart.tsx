@@ -109,7 +109,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
 
         {/* Labels below bar */}
         <div className="flex items-start justify-between text-[10px] font-mono text-zinc-500 px-0.5 relative">
-          <span className="text-red-400/70">0% → loss</span>
+          <span className="text-red-400/70">0% loss</span>
 
           {/* Breakeven label — centered */}
           {beAnalytic != null && (
@@ -121,7 +121,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
             </span>
           )}
 
-          <span className="text-emerald-400/70">profit → 100%</span>
+          <span className="text-emerald-400/70">100% profit</span>
         </div>
 
         {/* Current prob indicator */}
@@ -131,7 +131,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
             Market now at <span className={cn('font-mono font-semibold', inProfit ? 'text-emerald-400' : 'text-red-400')}>
               {(currentProb * 100).toFixed(1)}%
             </span>
-            {' '}— currently in <span className={inProfit ? 'text-emerald-400' : 'text-red-400'}>
+            {' '}- currently in <span className={inProfit ? 'text-emerald-400' : 'text-red-400'}>
               {inProfit ? 'profit zone' : 'loss zone'}
             </span>
           </span>

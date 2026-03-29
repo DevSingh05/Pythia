@@ -35,7 +35,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Delta',
       value: deltaPerPp,
       unit: '$ / 1pp',
-      tip: 'Approximate mark change for a +1 percentage-point move in YES (∂V/∂p × 0.01). Chain table still shows raw ∂V/∂p.',
+      tip: 'Approximate mark change for a +1 percentage-point move in YES (dV/dp x 0.01). Chain table still shows raw dV/dp.',
       normalise: v => Math.min(1, Math.abs(v) / 0.005),
       positive: option.type === 'call' ? true : undefined,
     },
@@ -44,7 +44,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Gamma',
       value: option.gamma,
       unit: 'ΔΔ/pp',
-      tip: 'Change in ∂V/∂p per +1 percentage-point move in YES (scaled second derivative). Peaks ATM.',
+      tip: 'Change in dV/dp per +1 percentage-point move in YES (scaled second derivative). Peaks ATM.',
       normalise: v => Math.min(1, Math.abs(v) / 0.35),
       positive: true,
     },
@@ -53,7 +53,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Theta',
       value: option.theta,
       unit: 'per day',
-      tip: 'American mark change per calendar day (∂V/∂t), bump-and-reprice on the binomial tree.',
+      tip: 'American mark change per calendar day (dV/dt), bump-and-reprice on the binomial tree.',
       normalise: v => Math.min(1, Math.abs(v) / 0.01),
       positive: false,
     },
@@ -62,7 +62,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Vega',
       value: vegaPerVolPt,
       unit: '$ / vol pt',
-      tip: 'Approximate mark change when σ moves by +0.01 in decimal (e.g. 0.30 → 0.31). Raw ∂V/∂σ is stored on the chain.',
+      tip: 'Approximate mark change when vol moves by +0.01 in decimal (e.g. 0.30 to 0.31). Raw dV/dSigma is stored on the chain.',
       normalise: v => Math.min(1, Math.abs(v) / 0.001),
     },
   ]
@@ -80,7 +80,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60">
         <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">The Greeks</span>
         <span className="text-[11px] font-mono text-zinc-500">
-          K={Math.round(option.strike * 100)}% · IV={Math.round(option.impliedVol * 100)}%
+          K={Math.round(option.strike * 100)}% / IV={Math.round(option.impliedVol * 100)}%
         </span>
       </div>
 

@@ -3,7 +3,7 @@ import './globals.css'
 import { AuthProvider } from '@/hooks/useAuth'
 
 export const metadata: Metadata = {
-  title: 'Pythia — Prediction Market Options',
+  title: 'Pythia - Prediction Market Options',
   description: 'Trade options on prediction market probabilities. The first options layer built on Polymarket YES%.',
   keywords: ['prediction markets', 'options', 'polymarket', 'probability', 'trading'],
 }

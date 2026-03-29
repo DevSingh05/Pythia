@@ -159,8 +159,8 @@ export default function PreTradeAnalysis({
               {market.outcomeLabel && (
                 <span className="text-violet-400/90 font-medium">{market.outcomeLabel}</span>
               )}
-              {market.outcomeLabel && ' · '}
-              {side.toUpperCase()} {quantity}× {option.type} @ {fmtProb(option.strike)} · {option.expiry}
+              {market.outcomeLabel && ' / '}
+              {side.toUpperCase()} {quantity}x {option.type} @ {fmtProb(option.strike)} / {option.expiry}
             </p>
           </div>
           <button

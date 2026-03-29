@@ -155,7 +155,7 @@ export default function OptionsChain({
                 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                 : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
           )}>
-            {isVeryStale ? '⚠ Stale' : isStale ? `${dataAgeS}s old` : 'Live'}
+            {isVeryStale ? 'Stale' : isStale ? `${dataAgeS}s old` : 'Live'}
           </span>
         </div>
       </div>
@@ -232,7 +232,7 @@ export default function OptionsChain({
       {/* Footer: contract count */}
       <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-900/40 text-center">
         <span className="text-[10px] text-zinc-600">
-          {options.length} contracts · {type === 'call' ? 'Call' : 'Put'}s · {selectedExpiry} expiry
+          {options.length} contracts / {type === 'call' ? 'Call' : 'Put'}s / {selectedExpiry} expiry
         </span>
       </div>
     </div>
