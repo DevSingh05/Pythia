@@ -301,7 +301,7 @@ export default function PayoffChart({
         <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/40 p-2 text-center">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-0.5 font-medium">Breakeven</div>
           <div className="text-xs font-mono font-bold text-amber-400">
-            {breakeven != null ? `${breakeven}%` : '—'}
+            {breakeven != null ? `${breakeven}%` : 'N/A'}
           </div>
         </div>
         <div className="rounded-lg bg-emerald-500/[0.07] border border-emerald-500/20 p-2 text-center">
