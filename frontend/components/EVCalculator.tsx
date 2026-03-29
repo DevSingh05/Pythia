@@ -2,7 +2,7 @@
 
 /**
  * EVCalculator
- * ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ * -----------------------------------------------------------------------------
  * Expected Value calculator for open positions.
  *
  * For each position, computes:
@@ -25,7 +25,7 @@ import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import InfoTooltip from '@/components/InfoTooltip'
 import { Calculator, TrendingUp, TrendingDown } from 'lucide-react'
 
-// ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// --- Types --------------------------------------------------------------------
 
 interface EVCalculatorProps {
   positions: Position[]
@@ -43,7 +43,7 @@ interface PositionEV {
   tau: number
 }
 
-// ΓöÇΓöÇΓöÇ Binary search for breakeven probability ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// --- Binary search for breakeven probability ----------------------------------
 
 /**
  * Find the market probability at which a position's option price equals avgCost.
@@ -73,7 +73,7 @@ function findBreakevenProb(
   return (lo + hi) / 2
 }
 
-// ΓöÇΓöÇΓöÇ EV computation ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// --- EV computation -----------------------------------------------------------
 
 function computePositionEVs(
   positions: Position[],
@@ -112,7 +112,7 @@ function computePositionEVs(
   })
 }
 
-// ΓöÇΓöÇΓöÇ Row Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// --- Row Component ------------------------------------------------------------
 
 function EVRow({ ev }: { ev: PositionEV }) {
   const { position, evPerContract, evTotal, breakevenProb, currentProb } = ev
@@ -122,14 +122,14 @@ function EVRow({ ev }: { ev: PositionEV }) {
     : position.marketTitle
 
   return (
-    <div className="rounded-lg border border-border/50 bg-surface/40 px-3 py-2.5 space-y-2">
+    <div className=" border border-border/50 bg-surface/40 px-3 py-2.5 space-y-2">
       {/* Title + badge */}
       <div className="flex items-start justify-between gap-2">
         <span className="text-xs text-zinc-300 leading-snug" title={position.marketTitle}>
           {shortTitle}
         </span>
         <span className={cn(
-          'shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide',
+          'shrink-0 text-[10px] font-bold px-2 py-0.5  uppercase tracking-wide',
           isPositive
             ? 'bg-green-muted text-green'
             : 'bg-red-muted text-red'
@@ -194,7 +194,7 @@ function EVRow({ ev }: { ev: PositionEV }) {
   )
 }
 
-// ΓöÇΓöÇΓöÇ Main Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// --- Main Component -----------------------------------------------------------
 
 export default function EVCalculator({ positions, orders, marketPrices }: EVCalculatorProps) {
   const evData = useMemo(
@@ -208,7 +208,7 @@ export default function EVCalculator({ positions, orders, marketPrices }: EVCalc
   if (positions.length === 0) return null
 
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
+    <div className="bg-card border border-border  overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">

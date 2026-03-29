@@ -84,6 +84,54 @@ html, body {
   animation: fade-in-up 1s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
+/* Slider grip thumb — horizontal oval with etched lines */
+.slider-grip::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid #52525b;
+  background:
+    /* Three grip lines */
+    linear-gradient(to right,
+      transparent 6px, #71717a 6px, #71717a 7px,
+      transparent 7px, transparent 10px, #71717a 10px, #71717a 11px,
+      transparent 11px, transparent 14px, #71717a 14px, #71717a 15px,
+      transparent 15px
+    ),
+    /* Base gradient */
+    linear-gradient(to bottom, #d4d4d8, #a1a1aa);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+.slider-grip::-webkit-slider-thumb:hover {
+  background:
+    linear-gradient(to right,
+      transparent 6px, #a1a1aa 6px, #a1a1aa 7px,
+      transparent 7px, transparent 10px, #a1a1aa 10px, #a1a1aa 11px,
+      transparent 11px, transparent 14px, #a1a1aa 14px, #a1a1aa 15px,
+      transparent 15px
+    ),
+    linear-gradient(to bottom, #e4e4e7, #d4d4d8);
+  border-color: #71717a;
+}
+.slider-grip::-moz-range-thumb {
+  width: 22px;
+  height: 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid #52525b;
+  background:
+    linear-gradient(to right,
+      transparent 6px, #71717a 6px, #71717a 7px,
+      transparent 7px, transparent 10px, #71717a 10px, #71717a 11px,
+      transparent 11px, transparent 14px, #71717a 14px, #71717a 15px,
+      transparent 15px
+    ),
+    linear-gradient(to bottom, #d4d4d8, #a1a1aa);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
 /* Demo mode: order book, premium ticker, overlays */
 @keyframes spin {
   to { transform: rotate(360deg); }
