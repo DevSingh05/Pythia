@@ -96,13 +96,27 @@ export function putDelta(p0: number, K: number, sigma: number, tau: number): num
 }
 
 /**
- * Gamma: second-order sensitivity d²V/dp² via central difference of callDelta
+ * Gamma: d²V/dL² — second derivative of option value with respect to
+ * logit-space moves (L = logit(p), the natural unbounded coordinate).
+ *
+ * Computing d²V/dp² directly gives enormous values (30+) near boundary
+ * probabilities because the logit Jacobian dL/dp = 1/(p(1-p)) amplifies
+ * curvature. By working entirely in logit space, Gamma stays bounded
+ * and interpretable (typically 0.00 to ~0.10).
+ *
+ * Interpretation: "How much option value accelerates per unit² logit move."
+ * Analogous to standard BS Gamma (d²V/dS²) where S = logit price.
  */
 export function gamma(p0: number, K: number, sigma: number, tau: number): number {
-  const eps = 0.001
-  const pUp = clampP(p0 + eps)
-  const pDn = clampP(p0 - eps)
-  return (callDelta(pUp, K, sigma, tau) - callDelta(pDn, K, sigma, tau)) / (pUp - pDn)
+  const L0 = logit(p0)
+  const eps = 0.05  // logit-space bump (wider for stable second derivative)
+  const pUp = sigmoid(L0 + eps)
+  const pMid = p0
+  const pDn = sigmoid(L0 - eps)
+  const vUp = vanillaCall(pUp, K, sigma, tau)
+  const vMid = vanillaCall(pMid, K, sigma, tau)
+  const vDn = vanillaCall(pDn, K, sigma, tau)
+  return (vUp - 2 * vMid + vDn) / (eps * eps)
 }
 
 /**

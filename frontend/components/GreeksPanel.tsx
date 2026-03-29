@@ -38,9 +38,9 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       symbol: 'Γ',
       name: 'Gamma',
       value: option.gamma,
-      unit: 'Δ / 1pp',
-      tip: 'Rate of change of Delta. Highest near ATM — options become most sensitive to the underlying around the strike.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.02),
+      unit: 'd²V/dL²',
+      tip: 'Convexity of option value in logit space. Highest near ATM — measures how fast the option accelerates in value as the underlying probability moves.',
+      normalise: v => Math.min(1, Math.abs(v) / 2.0),
       positive: true,
     },
     {
