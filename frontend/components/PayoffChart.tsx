@@ -4,7 +4,7 @@ import {
   ComposedChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid, ReferenceDot
 } from 'recharts'
-import { payoffCurve } from '@/lib/pricing'
+import { payoffCurve, COMMISSION_PER_CONTRACT } from '@/lib/pricing'
 import { OptionQuote } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -47,14 +47,21 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
   const maxPnl = Math.max(...pnlValues)
   const minPnl = Math.min(...pnlValues)
 
-  // Find breakeven (closest to zero crossing)
-  const bePoint = data.reduce((best, d) => Math.abs(d.pnl) < Math.abs(best.pnl) ? d : best)
-  const breakevenProb = bePoint.prob
-
-  // Find PnL at current probability
-  const currentPoint = data.reduce((best, d) =>
-    Math.abs(d.prob - currentProb) < Math.abs(best.prob - currentProb) ? d : best
-  )
+  // Breakeven computed analytically — searching the curve fails because
+  // PnL is constant at -premium for all p below K (call) or above K (put),
+  // causing the search to return p=0 instead of the true zero crossing.
+  const comm = COMMISSION_PER_CONTRACT
+  const totalCost = option.premium + comm
+  let breakevenProb: number
+  if (side === 'buy') {
+    breakevenProb = option.type === 'call'
+      ? Math.min(0.999, option.strike + totalCost)   // call: K + premium + comm
+      : Math.max(0.001, option.strike - totalCost)    // put:  K - premium - comm
+  } else {
+    breakevenProb = option.type === 'call'
+      ? Math.min(0.999, option.strike + (option.premium - comm))
+      : Math.max(0.001, option.strike - (option.premium - comm))
+  }
 
   const dataWithZones = data.map(d => ({
     ...d,

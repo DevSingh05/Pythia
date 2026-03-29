@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
+import { COMMISSION_PER_CONTRACT } from '@/lib/pricing'
 import PayoffChart from './PayoffChart'
 import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -44,7 +45,8 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
   }
 
   const isCall = option.type === 'call'
-  const totalCost = option.premium * quantity
+  const commission = COMMISSION_PER_CONTRACT * quantity
+  const totalCost = option.premium * quantity + commission
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -159,7 +161,7 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           currentProb={market.currentProb}
         />
 
-        {/* Premium + breakeven */}
+        {/* Premium + breakeven + commission */}
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-800/50 rounded-lg p-3">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Premium / contract</div>
@@ -169,6 +171,12 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
             <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Breakeven YES%</div>
             <div className="text-sm font-mono font-semibold text-blue-400">{fmtProb(option.breakeven, 1)}</div>
           </div>
+        </div>
+
+        {/* Commission */}
+        <div className="flex items-center justify-between bg-zinc-800/30 rounded-lg px-3 py-2 text-xs">
+          <span className="text-zinc-500">Commission</span>
+          <span className="font-mono text-zinc-400">{fmtPremium(COMMISSION_PER_CONTRACT)} × {quantity} = {fmtPremium(commission)}</span>
         </div>
 
         {/* Quantity + total */}
@@ -235,9 +243,6 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </button>
         )}
 
-        <p className="text-[10px] text-zinc-600 text-center">
-          European · Cash settled · Logit-Normal pricing
-        </p>
       </div>
     </div>
 

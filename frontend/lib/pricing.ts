@@ -20,6 +20,9 @@ const VEGA_BUMP         = 0.01    // 1% absolute vol bump
 const THETA_DT          = 1 / 365 // 1 calendar day
 const DAYS_PER_YEAR     = 365     // calendar days (Polymarket resolves any day)
 
+/** Per-contract commission in dollars (2¢) */
+export const COMMISSION_PER_CONTRACT = 0.02
+
 // ── Core transforms ──────────────────────────────────────────────────────────
 
 function clampP(p: number): number {
@@ -337,12 +340,15 @@ export function buildOptionsChain(
     return x - Math.floor(x)
   }
 
+  const comm = COMMISSION_PER_CONTRACT
+
   const calls: OptionData[] = useStrikes.map((K, i) => {
     const premium = vanillaCall(currentProb, K, sigma, tau)
     const rng = seed(K * 100 + i)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
     const change = premium - prevPremium
-    const breakeven = Math.min(0.999, K + premium)
+    // Call breakeven at expiry: need p_T > K + premium + commission to profit
+    const breakeven = Math.min(0.999, K + premium + comm)
 
     return {
       strike: K,
@@ -368,7 +374,8 @@ export function buildOptionsChain(
     const rng = seed(K * 200 + i * 3)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
     const change = premium - prevPremium
-    const breakeven = Math.max(0.001, K - premium)
+    // Put breakeven at expiry: need p_T < K - premium - commission to profit
+    const breakeven = Math.max(0.001, K - premium - comm)
 
     return {
       strike: K,
@@ -424,7 +431,9 @@ export function computeHistoricalVol(history: { t: number; p: number }[]): numbe
 }
 
 /**
- * Generate payoff data for the P&L chart
+ * Generate payoff data for the P&L chart.
+ * Includes per-contract commission in the cost basis.
+ * Uses 200 points for smooth curves and accurate breakeven detection.
  */
 export function payoffCurve(
   optionType: 'call' | 'put',
@@ -433,18 +442,22 @@ export function payoffCurve(
   quantity: number,
   side: 'buy' | 'sell'
 ): { prob: number; pnl: number }[] {
+  const comm = COMMISSION_PER_CONTRACT
+  const totalCostPerContract = premium + comm  // what you pay per contract (buy side)
   const points: { prob: number; pnl: number }[] = []
-  for (let i = 0; i <= 100; i++) {
-    const p = i / 100
+  for (let i = 0; i <= 200; i++) {
+    const p = i / 200
     let intrinsic: number
     if (optionType === 'call') {
       intrinsic = Math.max(0, p - strike)
     } else {
       intrinsic = Math.max(0, strike - p)
     }
+    // Buy: profit = intrinsic - (premium + commission)
+    // Sell: profit = (premium - commission) - intrinsic  [seller pays commission too]
     const pnl = side === 'buy'
-      ? (intrinsic - premium) * quantity
-      : (premium - intrinsic) * quantity
+      ? (intrinsic - totalCostPerContract) * quantity
+      : ((premium - comm) - intrinsic) * quantity
     points.push({ prob: p, pnl })
   }
   return points
