@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ChangeEvent } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Search, LogOut, Briefcase, Menu, X } from 'lucide-react'
@@ -45,62 +45,117 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
 
   const closeMobile = () => setMobileOpen(false)
 
+  const searchInputProps = {
+    type: 'text' as const,
+    placeholder: 'Search markets...',
+    value: searchQuery,
+    onChange: (e: ChangeEvent<HTMLInputElement>) => onSearch?.(e.target.value),
+  }
+
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-border bg-bg/80 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center gap-3 md:gap-5">
+      <header
+        className="sticky top-0 z-50"
+        style={{
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(9,9,11,0.75)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-3 md:gap-6">
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setMobileOpen(true)}
             className={cn(
-              'md:hidden p-2 -ml-2 rounded-md border border-border bg-surface text-zinc-200',
-              'hover:bg-card hover:border-zinc-600 transition-colors',
+              'md:hidden p-2 -ml-2 rounded-md shrink-0',
+              'border border-white/[0.08] bg-white/[0.05] text-zinc-200',
+              'hover:bg-white/[0.08] hover:border-purple-500/30 transition-colors',
             )}
           >
             <Menu className="w-4 h-4" />
           </button>
 
-          <Link href="/" className="flex items-center gap-2.5 shrink-0" onClick={closeMobile}>
-            <span className="font-semibold text-sm text-zinc-100 tracking-tight">Pythia</span>
-            <span className="text-[10px] text-muted font-medium px-1.5 py-0.5 rounded bg-surface border border-border">
+          <Link href="/" className="flex items-center gap-3 shrink-0" onClick={closeMobile}>
+            <span
+              style={{
+                fontFamily: 'Orbitron, var(--font-orbitron), system-ui, sans-serif',
+                fontWeight: 900,
+                letterSpacing: '0.12em',
+                fontSize: '1.1rem',
+                color: '#fff',
+                textShadow: '0 0 18px rgba(168,85,247,0.75), 0 0 40px rgba(139,92,246,0.35)',
+              }}
+            >
+              PYTHIA
+            </span>
+            <span
+              style={{
+                fontSize: '9px',
+                fontWeight: 600,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'rgba(192,132,252,0.85)',
+                background: 'rgba(168,85,247,0.12)',
+                border: '1px solid rgba(168,85,247,0.28)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+              }}
+            >
               BETA
             </span>
           </Link>
 
           {onSearch !== undefined && (
-            <div className="flex-1 min-w-0 max-w-sm relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
+            <div className="flex-1 min-w-0 max-w-sm relative hidden md:block">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+                style={{ color: 'rgba(255,255,255,0.25)' }}
+              />
               <input
-                type="text"
-                placeholder="Search markets..."
-                value={searchQuery}
-                onChange={e => onSearch(e.target.value)}
-                className={cn(
-                  'w-full bg-surface border border-border rounded-md pl-9 pr-3 py-1.5',
-                  'text-sm placeholder:text-muted text-zinc-200',
-                  'focus:outline-none focus:border-zinc-600 focus:bg-card',
-                  'transition-colors duration-150',
-                )}
+                {...searchInputProps}
+                className="w-full text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none transition-all duration-150"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                }}
+                onFocus={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                  e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
+                }}
+                onBlur={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                }}
               />
             </div>
           )}
-          {onSearch === undefined && <div className="flex-1 min-w-0 hidden sm:block" />}
-          {onSearch !== undefined && (
-            <div className="flex-1 min-w-0 sm:hidden" />
-          )}
+          {onSearch === undefined && <div className="flex-1 min-w-0 hidden md:block" />}
+          {onSearch !== undefined && <div className="flex-1 min-w-0 md:hidden" />}
 
-          <nav className="hidden md:flex items-center gap-0.5 shrink-0">
+          <nav className="hidden md:flex items-center gap-1 shrink-0">
             <Link
               href="/"
-              className="px-3 py-1.5 text-sm text-muted hover:text-zinc-200 rounded-md transition-colors"
+              className="px-4 py-2 text-sm rounded-lg transition-colors duration-150"
+              style={{ color: 'rgba(255,255,255,0.5)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'transparent' }}
             >
               Markets
             </Link>
             {user && (
               <Link
                 href="/portfolio"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted hover:text-zinc-200 rounded-md transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg transition-colors duration-150"
+                style={{ color: 'rgba(255,255,255,0.5)' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.background = 'transparent' }}
               >
                 <Briefcase className="w-3.5 h-3.5" />
                 Portfolio
@@ -108,15 +163,31 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
             )}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2 shrink-0">
+          <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
             {!loading && !user && (
               <button
                 type="button"
                 onClick={() => setShowAuth(true)}
-                className={cn(
-                  'px-2.5 sm:px-3 py-1.5 rounded-md border border-border text-sm text-zinc-300',
-                  'bg-surface hover:bg-card hover:border-zinc-600 transition-colors',
-                )}
+                className="text-sm font-medium text-zinc-200 transition-all duration-200 hover:text-white"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(255,255,255,0.13)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  boxShadow: '0 1px 0 rgba(255,255,255,0.07) inset, 0 2px 12px rgba(0,0,0,0.25)',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(168,85,247,0.14)'
+                  e.currentTarget.style.borderColor = 'rgba(168,85,247,0.38)'
+                  e.currentTarget.style.boxShadow = '0 1px 0 rgba(255,255,255,0.08) inset, 0 2px 16px rgba(168,85,247,0.18)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.07)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.13)'
+                  e.currentTarget.style.boxShadow = '0 1px 0 rgba(255,255,255,0.07) inset, 0 2px 12px rgba(0,0,0,0.25)'
+                }}
               >
                 <span className="hidden sm:inline">Log in / Sign up</span>
                 <span className="sm:hidden">Log in</span>
@@ -124,18 +195,35 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
             )}
 
             {!loading && user && (
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:block text-xs text-muted max-w-[160px] truncate">
+              <div className="flex items-center gap-2 md:gap-3">
+                <span className="hidden sm:block text-xs truncate max-w-[160px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
                   {user.email}
                 </span>
                 <button
                   type="button"
                   onClick={signOut}
                   title="Sign out"
-                  className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border text-sm text-zinc-300',
-                    'bg-surface hover:bg-card hover:border-zinc-600 transition-colors',
-                  )}
+                  className="flex items-center gap-1.5 text-sm transition-all duration-200"
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    color: 'rgba(255,255,255,0.6)',
+                    background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(255,255,255,0.11)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    boxShadow: '0 1px 0 rgba(255,255,255,0.07) inset, 0 2px 12px rgba(0,0,0,0.25)',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.color = '#fff'
+                    e.currentTarget.style.background = 'rgba(220,38,38,0.12)'
+                    e.currentTarget.style.borderColor = 'rgba(220,38,38,0.28)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.6)'
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.07)'
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.11)'
+                  }}
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Sign out</span>
@@ -144,25 +232,41 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
             )}
 
             {loading && (
-              <div className="h-8 w-28 rounded-md bg-surface border border-border animate-pulse" />
+              <div
+                className="h-9 w-32 rounded-lg animate-pulse"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+              />
             )}
           </div>
         </div>
 
         {onSearch !== undefined && (
-          <div className="sm:hidden px-4 pb-3 border-t border-border/60 bg-bg/95">
+          <div className="md:hidden px-4 pb-3 border-t border-white/[0.06]">
             <div className="relative mt-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+                style={{ color: 'rgba(255,255,255,0.25)' }}
+              />
               <input
-                type="text"
-                placeholder="Search markets..."
-                value={searchQuery}
-                onChange={e => onSearch(e.target.value)}
-                className={cn(
-                  'w-full bg-surface border border-border rounded-md pl-9 pr-3 py-2',
-                  'text-sm placeholder:text-muted text-zinc-200',
-                  'focus:outline-none focus:border-zinc-600 focus:bg-card',
-                )}
+                {...searchInputProps}
+                className="w-full text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none transition-all duration-150"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  paddingLeft: '36px',
+                  paddingRight: '12px',
+                  paddingTop: '10px',
+                  paddingBottom: '10px',
+                }}
+                onFocus={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                  e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
+                }}
+                onBlur={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                }}
               />
             </div>
           </div>
@@ -178,15 +282,22 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
             onClick={closeMobile}
           />
           <div
-            className="absolute top-0 right-0 h-full w-[min(100%,280px)] shadow-2xl bg-card border-l border-border flex flex-col"
+            className="absolute top-0 right-0 h-full w-[min(100%,280px)] shadow-2xl flex flex-col border-l border-white/[0.08]"
+            style={{ background: 'rgba(9,9,11,0.98)' }}
           >
-            <div className="flex items-center justify-between px-4 h-14 border-b border-border">
+            <div
+              className="flex items-center justify-between px-4 h-16 border-b"
+              style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+            >
               <span className="text-sm font-medium text-zinc-200">Menu</span>
               <button
                 type="button"
                 aria-label="Close"
                 onClick={closeMobile}
-                className="p-2 rounded-md border border-border text-muted hover:text-zinc-200 hover:bg-surface"
+                className={cn(
+                  'p-2 rounded-md text-muted hover:text-zinc-200 transition-colors',
+                  'border border-white/[0.08] bg-white/[0.05] hover:bg-white/[0.08]',
+                )}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -195,7 +306,7 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
               <Link
                 href="/"
                 onClick={closeMobile}
-                className="px-4 py-3 text-sm text-zinc-200 rounded-lg hover:bg-surface border border-transparent hover:border-border transition-colors"
+                className="px-4 py-3 text-sm text-zinc-200 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-colors"
               >
                 Markets
               </Link>
@@ -203,9 +314,9 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
                 <Link
                   href="/portfolio"
                   onClick={closeMobile}
-                  className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-200 rounded-lg hover:bg-surface border border-transparent hover:border-border transition-colors"
+                  className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-200 rounded-lg hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] transition-colors"
                 >
-                  <Briefcase className="w-4 h-4 text-muted" />
+                  <Briefcase className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.45)' }} />
                   Portfolio
                 </Link>
               )}
@@ -216,7 +327,7 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
                     closeMobile()
                     setShowAuth(true)
                   }}
-                  className="mt-2 mx-1 px-4 py-3 text-sm text-left rounded-lg border border-border bg-surface text-zinc-200 hover:bg-card"
+                  className="mt-2 mx-1 px-4 py-3 text-sm text-left rounded-lg border border-white/[0.12] bg-white/[0.05] text-zinc-200 hover:bg-white/[0.08]"
                 >
                   Log in / Sign up
                 </button>

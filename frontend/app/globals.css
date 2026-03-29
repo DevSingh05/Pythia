@@ -65,6 +65,16 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Star button sparkle */
+@keyframes star-spin {
+  0%   { transform: rotate(0deg) scale(0.6); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: rotate(72deg) scale(1); opacity: 0.9; }
+}
+.animate-star-spin {
+  animation: star-spin 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Sphere hero fade-in */
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(16px); }

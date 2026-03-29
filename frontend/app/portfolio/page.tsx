@@ -11,10 +11,11 @@ import ScenarioAnalysis from '@/components/ScenarioAnalysis'
 import PnlBreakdown from '@/components/PnlBreakdown'
 import EVCalculator from '@/components/EVCalculator'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
-import { fetchMarket, fetchVolatility, fetchAmericanPrice, Position } from '@/lib/api'
+import { fetchMarket, fetchOptionsChain, fetchAmericanPrice, Position } from '@/lib/api'
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, RotateCcw, Wallet, Briefcase } from 'lucide-react'
+import { StarButton } from '@/components/ui/star-button'
 
 export default function PortfolioPage() {
   const {
@@ -32,13 +33,13 @@ export default function PortfolioPage() {
 
     await Promise.allSettled(
       uniqueMarketIds.map(async (id) => {
-        const [market, vol] = await Promise.allSettled([
+        const [market, chain] = await Promise.allSettled([
           fetchMarket(id),
-          fetchVolatility(id),
+          fetchOptionsChain(id),
         ])
 
         const currentProb = market.status === 'fulfilled' ? market.value.currentProb : undefined
-        const impliedVol  = vol.status === 'fulfilled' ? (vol.value as any).sigma : undefined
+        const impliedVol  = chain.status === 'fulfilled' ? chain.value.impliedVol : undefined
 
         if (currentProb === undefined) return
 
@@ -150,30 +151,19 @@ export default function PortfolioPage() {
               </span>
             </div>
 
-            <button
-              type="button"
+            <StarButton
+              size="sm"
+              variant="ghost"
               onClick={handleManualRefresh}
               disabled={refreshing}
-              className={cn(
-                'flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border border-border',
-                'text-xs text-muted hover:text-zinc-200 hover:border-zinc-600 bg-surface transition-colors',
-                refreshing && 'opacity-60 cursor-not-allowed'
-              )}
             >
-              <RotateCcw className={cn('w-3.5 h-3.5 sm:w-3 sm:h-3 shrink-0', refreshing && 'animate-spin')} />
+              <RotateCcw className={cn('w-3 h-3 shrink-0', refreshing && 'animate-spin')} />
               <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className={cn(
-                'flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border border-red/30',
-                'text-xs text-red/70 hover:text-red hover:border-red/50 bg-surface transition-colors',
-              )}
-            >
+            </StarButton>
+            <StarButton size="sm" variant="danger" onClick={handleReset}>
               <span className="sm:hidden">Reset</span>
               <span className="hidden sm:inline">Reset portfolio</span>
-            </button>
+            </StarButton>
           </div>
         </div>
 
@@ -228,7 +218,7 @@ export default function PortfolioPage() {
           <PnlBreakdown positions={positions} orders={orders} marketPrices={marketPrices} />
         )}
 
-        {/* ΓöÇΓöÇ Scenario Analysis ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+        {/* Scenario analysis */}
         {hydrated && positions.length > 0 && (
           <ScenarioAnalysis
             positions={positions}

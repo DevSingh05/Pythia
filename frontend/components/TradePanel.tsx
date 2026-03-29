@@ -5,6 +5,7 @@ import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
 import PayoffChart, { computePayoffMetrics, fmtCents } from './PayoffChart'
 import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
+import { StarButton } from './ui/star-button'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
@@ -245,11 +246,13 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
 
         {/* Submit — gated on auth */}
         {user ? (
-          <button
+          <StarButton
+            variant={side === 'buy' ? 'buy' : 'sell'}
+            size="lg"
             onClick={handleSubmit}
             disabled={loading || noExecutablePremium}
             className={cn(
-              'w-full py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-colors',
+              'w-full justify-center py-2.5 text-sm font-semibold tracking-wide transition-colors',
               side === 'buy'
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 : 'bg-red-600 hover:bg-red-500 text-white',
@@ -257,15 +260,16 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
             )}
           >
             {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`}
-          </button>
+          </StarButton>
         ) : (
-          <button
+          <StarButton
+            size="lg"
             onClick={() => setShowAuth(true)}
-            className="w-full py-2.5 rounded-lg text-sm font-semibold transition-colors bg-accent hover:bg-accent/90 text-white flex items-center justify-center gap-2"
+            className="w-full justify-center"
           >
             <LogIn className="w-4 h-4" />
             Log in to place orders
-          </button>
+          </StarButton>
         )}
 
         <p className="text-[10px] text-zinc-600 text-center">

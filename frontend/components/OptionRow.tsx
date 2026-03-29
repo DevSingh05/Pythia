@@ -9,6 +9,9 @@ interface OptionRowProps {
   onSelect: (opt: OptionQuote) => void
   selected?: boolean
   showGreeks?: boolean
+  liquidityScore?: number   // 0–1, drives left border heat stripe
+  isDemoHighlighted?: boolean  // amber pulse ring when demo is selecting this row
+  isDemoSelecting?: boolean    // shimmer sweep when demo phase === 'selecting'
 }
 
 function GreekCell({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -26,6 +29,9 @@ export default function OptionRow({
   onSelect,
   selected,
   showGreeks,
+  liquidityScore = 0,
+  isDemoHighlighted = false,
+  isDemoSelecting = false,
 }: OptionRowProps) {
   const isCall = option.type === 'call'
   const atm = Math.abs(option.strike - currentProb) < 0.025
@@ -47,11 +53,16 @@ export default function OptionRow({
       ? 'text-zinc-300'
       : 'text-zinc-500'
 
+  // Liquidity heat: interpolate from transparent → emerald at liquidityScore
+  const heatAlpha = liquidityScore * 0.55
+  const heatColor = `rgba(16,185,129,${heatAlpha})`
+
   return (
     <button
       onClick={() => onSelect(option)}
+      data-demo-strike={option.strike}
       className={cn(
-        'w-full text-left grid items-center px-3 py-3 transition-all duration-150',
+        'w-full text-left grid items-center px-3 py-3 transition-all duration-150 relative overflow-hidden',
         'border-b border-zinc-800/40 last:border-0',
         showGreeks
           ? 'grid-cols-[72px_80px_1fr_80px]'
@@ -61,8 +72,19 @@ export default function OptionRow({
         selected
           ? 'bg-accent/8 ring-1 ring-inset ring-accent/30'
           : 'hover:bg-zinc-800/40',
+        isDemoHighlighted && 'ring-1 ring-inset ring-amber-400/50 bg-amber-500/[0.06]',
       )}
+      style={{
+        borderLeft: liquidityScore > 0.05 ? `3px solid ${heatColor}` : undefined,
+      }}
     >
+      {/* Liquidity shimmer sweep during demo selecting */}
+      {isDemoSelecting && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ animation: 'liquidityShimmer 1.2s ease-in-out infinite' }}
+        />
+      )}
       {/* Strike + moneyness */}
       <div>
         <div className={cn(
