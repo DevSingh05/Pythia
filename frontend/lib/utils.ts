@@ -10,6 +10,7 @@ export function fmtProb(p: number, decimals = 0): string {
 }
 
 export function fmtPremium(p: number): string {
+  if (p < 0.00005) return '<0.01¢'
   if (p < 0.01) return `${(p * 100).toFixed(2)}¢`
   return `$${p.toFixed(3)}`
 }

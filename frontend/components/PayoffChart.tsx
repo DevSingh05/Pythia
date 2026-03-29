@@ -65,10 +65,8 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
   const yPad = (maxPnl - minPnl) * 0.15 || 0.01
   const yDomain = [minPnl - yPad, maxPnl + yPad]
 
-  const isUnlimited = side === 'sell' && (
-    (option.type === 'call' && maxPnl === option.premium * quantity) ||
-    (option.type === 'put' && maxPnl === option.premium * quantity)
-  )
+  // Probability options are bounded [0,1] — max profit is always finite
+  // (unlike equity options where stock can go to infinity)
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -77,7 +75,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
         <div className="rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 p-3 text-center">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
           <div className="text-base font-mono font-bold text-emerald-400">
-            {side === 'buy' && option.type === 'call' ? 'Unlimited' : fmtCents(maxPnl)}
+            {fmtCents(maxPnl)}
           </div>
         </div>
         <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3 text-center">

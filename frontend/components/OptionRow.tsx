@@ -11,6 +11,14 @@ interface OptionRowProps {
   showGreeks?: boolean
 }
 
+/** Format a Greek value — strips the negative sign from values that round to zero */
+function fmtG(v: number, decimals: number): string {
+  const s = v.toFixed(decimals)
+  // Avoid displaying "-0.0000" — show "0.0000" instead
+  if (parseFloat(s) === 0) return (0).toFixed(decimals)
+  return s
+}
+
 function GreekCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div className="text-center min-w-[56px]">
@@ -90,10 +98,10 @@ export default function OptionRow({
       {/* Greeks */}
       {showGreeks && (
         <div className="flex items-center justify-center gap-2">
-          <GreekCell label="Delta" value={option.delta.toFixed(3)} color={deltaColor} />
-          <GreekCell label="Gamma" value={option.gamma.toFixed(4)} color="text-blue-400" />
-          <GreekCell label="Theta" value={option.theta.toFixed(4)} color="text-red-400/80" />
-          <GreekCell label="Vega" value={option.vega.toFixed(3)} color="text-violet-400" />
+          <GreekCell label="Delta" value={fmtG(option.delta, 3)} color={deltaColor} />
+          <GreekCell label="Gamma" value={fmtG(option.gamma, 4)} color="text-blue-400" />
+          <GreekCell label="Theta" value={fmtG(option.theta, 4)} color="text-red-400/80" />
+          <GreekCell label="Vega" value={fmtG(option.vega, 4)} color="text-violet-400" />
         </div>
       )}
 

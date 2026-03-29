@@ -38,18 +38,18 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       symbol: 'Γ',
       name: 'Gamma',
       value: option.gamma,
-      unit: 'ΔΔ/pp',
-      tip: 'Change in delta per 1 percentage-point move in probability. Peaks at-the-money and tapers to near zero for deep ITM/OTM options.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.35),
+      unit: 'Δ/pp',
+      tip: 'Change in delta per 1 percentage-point move in probability. Peaks at-the-money, tapers to near zero deep ITM/OTM.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.12),
       positive: true,
     },
     {
       symbol: 'Θ',
       name: 'Theta',
       value: option.theta,
-      unit: 'per day',
-      tip: 'Time decay per calendar day. Always negative for long options — you lose premium as expiry approaches.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.01),
+      unit: '$/day',
+      tip: 'Dollar decay per calendar day. Always negative for long options — you lose this much premium each day.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.003),
       positive: false,
     },
     {
@@ -57,8 +57,8 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Vega',
       value: option.vega,
       unit: 'per 1% σ',
-      tip: 'Sensitivity to a 1% change in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.1),
+      tip: 'Dollar sensitivity to a 1 percentage-point move in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.008),
     },
   ]
 
@@ -137,7 +137,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
           <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500/50 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, option.impliedVol * 33)}%` }}
+              style={{ width: `${Math.min(100, option.impliedVol * 67)}%` }}
             />
           </div>
         </div>

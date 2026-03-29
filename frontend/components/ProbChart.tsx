@@ -253,9 +253,23 @@ export default function ProbChart({
   }
 
   if (mergedData.length === 0) {
+    // Show current probability as a flat line when no trade history exists
+    const now = Date.now()
+    const prob = currentProb ?? 0.5
+    const syntheticData = [
+      { t: now - 86_400_000, p0: prob },
+      { t: now, p0: prob },
+    ]
     return (
-      <div className={cn('h-72 flex items-center justify-center rounded-xl border border-zinc-800', className)}>
-        <span className="text-zinc-600 text-sm">No price history available</span>
+      <div className={cn('h-72 rounded-xl border border-zinc-800 flex flex-col', className)}>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-2">
+            <div className="text-3xl font-mono font-bold text-zinc-300 tabular-nums">
+              {(prob * 100).toFixed(1)}%
+            </div>
+            <span className="text-zinc-600 text-xs">Current probability — no trade history yet</span>
+          </div>
+        </div>
       </div>
     )
   }

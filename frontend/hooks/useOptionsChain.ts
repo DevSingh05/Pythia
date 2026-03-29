@@ -88,18 +88,12 @@ export function useOptionsChain(
       puts:  dedup(data.puts)  as typeof data.puts,
     })
 
-    if (apiUrl) {
-      fetchOptionsChain(marketId, expiry)
-        .then(data => setState({ data: sanitise(data), loading: false, error: null }))
-        .catch(async () => {
-          const data = await compute()
-          setState({ data: sanitise(data), loading: false, error: null })
-        })
-    } else {
-      compute()
-        .then(data => setState({ data: sanitise(data), loading: false, error: null }))
-        .catch(() => setState({ data: null, loading: false, error: 'Failed to build options chain' }))
-    }
+    // Always use client-side computation for consistent, up-to-date Greeks.
+    // The backend pricer requires a running Python process on the correct port
+    // with matching code — client-side avoids that coupling.
+    compute()
+      .then(data => setState({ data: sanitise(data), loading: false, error: null }))
+      .catch(() => setState({ data: null, loading: false, error: 'Failed to build options chain' }))
   }, [marketId, currentProb, impliedVol, clobTokenId, expiry, apiUrl])
 
   return state

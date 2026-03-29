@@ -19,6 +19,7 @@ from typing import Literal
 SIGMA_FLOOR = 0.05
 SIGMA_CAP = 5.0
 PROB_CLAMP = (1e-6, 1 - 1e-6)
+DAYS_PER_YEAR = 365  # calendar days — Polymarket events resolve any day
 
 STRIKE_GRID = [
     0.03, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25,
@@ -66,7 +67,7 @@ def american_option_binomial(
         p0:    current probability in (0, 1)
         K:     strike probability in (0, 1)
         sigma: annualised logit-space volatility (e.g. 0.60 = 60%)
-        tau:   time to expiry in years (e.g. 30/252)
+        tau:   time to expiry in years (e.g. 30/365)
         N:     number of tree steps (100 → ~1.5ms, error < 0.08%)
         kind:  "call" or "put"
 
@@ -130,34 +131,37 @@ def greeks(
 
     base = price(p0, sigma, tau)
 
-    dp = 0.01       # 1% probability bump
-    ds = 0.01       # 1% vol bump
-    dt = 1 / 252    # 1 trading day
+    # ── Delta: central difference in probability space ────────────────────
+    dp = 0.001  # 0.1pp bump (matches frontend DELTA_BUMP)
+    p_up = safe_prob(p0 + dp)
+    p_dn = safe_prob(p0 - dp)
+    delta = (price(p_up, sigma, tau) - price(p_dn, sigma, tau)) / (p_up - p_dn)
 
-    delta = (price(p0 + dp, sigma, tau) - price(p0 - dp, sigma, tau)) / (2 * dp)
-    vega  = (price(p0, sigma + ds, tau) - price(p0, sigma - ds, tau)) / (2 * ds)
-    theta = (price(p0, sigma, tau - dt) - base) / dt   # $/day, negative
+    # ── Gamma: differentiate the delta function, not the price directly ───
+    # Direct second FD of price amplifies integration noise by ~40,000x
+    # (dp²=2.5e-5 denominator vs ~1e-5 pricing error). Differencing delta
+    # drops amplification to ~25x because delta is already smoothed.
+    gp = 0.02   # 2pp outer bump (matches frontend GAMMA_OUTER_BUMP)
+    gp_up = safe_prob(p0 + gp)
+    gp_dn = safe_prob(p0 - gp)
+    delta_up = (price(safe_prob(gp_up + dp), sigma, tau) - price(safe_prob(gp_up - dp), sigma, tau)) / (2 * dp)
+    delta_dn = (price(safe_prob(gp_dn + dp), sigma, tau) - price(safe_prob(gp_dn - dp), sigma, tau)) / (2 * dp)
+    gamma = (delta_up - delta_dn) / (gp_up - gp_dn) * 0.01  # per 1pp
 
-    # Gamma: d²V/dp² scaled to "delta change per 1pp move"
-    #
-    # Raw d²V/dp² gives values of ~25-30 at ATM because the underlying
-    # range is [0,1] — curvature is inherently ~100x stock-world gamma.
-    # d²V/dL² (logit-space) goes negative for deep ITM due to sigmoid''(L)<0,
-    # which is mathematically correct but misleading (long call = negative gamma?).
-    #
-    # Solution: compute probability-space gamma, then normalise to per-pp.
-    # Γ_display = d²V/dp² × 0.01  →  "if prob moves 1pp, delta changes by Γ"
-    #
-    # Properties:
-    #   - Always non-negative for long vanilla options  ✓
-    #   - Peaks ATM (~0.25), tapers to ~0 deep ITM/OTM  ✓
-    #   - Comparable magnitude to stock-world gamma      ✓
-    #   - Consistent between backend and frontend        ✓
-    gp = 0.005   # half-pp bump for stable second derivative
-    p_up = safe_prob(p0 + gp)
-    p_dn = safe_prob(p0 - gp)
-    raw_gamma = (price(p_up, sigma, tau) - 2 * base + price(p_dn, sigma, tau)) / (gp ** 2)
-    gamma = raw_gamma * 0.01  # normalise to delta-change per 1pp
+    # ── Theta: dollar decay per calendar day (do NOT divide by dt) ────────
+    # V(tau - 1day) - V(tau) is already the per-day change.
+    # Dividing by dt=1/365 would annualise (×365), giving $/year not $/day.
+    dt = 1 / DAYS_PER_YEAR
+    tau_minus = max(dt / 10, tau - dt)
+    theta = price(p0, sigma, tau_minus) - base  # small negative for long options
+
+    # ── Vega: dollar sensitivity per 1% vol move ─────────────────────────
+    # Divide by 2 (not 2*eps) so result = ΔV for a 0.01 move in sigma.
+    # Dividing by 2*eps=0.02 would give dV/dσ per unit sigma (per 100% move).
+    ds = 0.01
+    sig_up = sigma + ds
+    sig_dn = max(0.01, sigma - ds)
+    vega = (price(p0, sig_up, tau) - price(p0, sig_dn, tau)) / 2
 
     return {
         "price": round(base, 6),
@@ -187,7 +191,7 @@ def early_exercise_boundary(
     Returns list of {tau_days, p_star}.
     """
     boundary = []
-    for t in np.linspace(1 / 252, tau, steps):
+    for t in np.linspace(1 / DAYS_PER_YEAR, tau, steps):
         if kind == "call":
             lo, hi = K, 1.0 - 1e-6
         else:
@@ -203,7 +207,7 @@ def early_exercise_boundary(
             else:
                 lo = mid
 
-        boundary.append({"tau_days": round(t * 252, 1), "p_star": round((lo + hi) / 2.0, 6)})
+        boundary.append({"tau_days": round(t * DAYS_PER_YEAR, 1), "p_star": round((lo + hi) / 2.0, 6)})
 
     return boundary
 
@@ -282,7 +286,7 @@ def available_strikes(
     Guarantees at least min_strikes by widening the window or picking nearest.
     """
     L0      = logit(p0)
-    sigma_t = clamp_sigma(sigma) * np.sqrt(tau_days / 252.0)
+    sigma_t = clamp_sigma(sigma) * np.sqrt(tau_days / DAYS_PER_YEAR)
     # Ensure a minimum logit-space range so short-dated/low-vol markets
     # still show a meaningful chain
     half_width = max(n_std * sigma_t, 0.8)
@@ -321,7 +325,7 @@ def compute_chain(
     results = []
     for K in strikes:
         for tau_days in taus:
-            tau = tau_days / 252.0
+            tau = tau_days / DAYS_PER_YEAR
             call_g = greeks(p0, K, sigma, tau, N, "call")
             put_g  = greeks(p0, K, sigma, tau, N, "put")
             results.append({
@@ -381,7 +385,7 @@ def implied_distribution(
     Returns {probs: [...], densities: [...]} for rendering the distribution curve.
     """
     L0  = logit(p0)
-    std = clamp_sigma(sigma) * np.sqrt(max(tau, 1 / 252))
+    std = clamp_sigma(sigma) * np.sqrt(max(tau, 1 / DAYS_PER_YEAR))
 
     # Sample uniformly in logit space, map back to prob space
     L_lo = L0 - 4 * std
