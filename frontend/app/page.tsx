@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils'
 const ProbSphere = lazy(() =>
   import('@/components/ui/prob-sphere').then(m => ({ default: m.ProbSphere }))
 )
+const OracleBackground = lazy(() =>
+  import('@/components/ui/oracle-background').then(m => ({ default: m.OracleBackground }))
+)
 
 // tag ids match Polymarket tag labels (case-insensitive substring match in proxy)
 const CATEGORIES = [
@@ -49,6 +52,11 @@ export default function HomePage() {
 
       {/* Hero — full viewport, sphere centered and prominent */}
       <div className="relative overflow-hidden border-b border-border" style={{ height: 'calc(100vh - 52px)' }}>
+
+        {/* Greek letter field — oracle chamber inscriptions */}
+        <Suspense fallback={null}>
+          <OracleBackground />
+        </Suspense>
 
         {/* Sphere — fills and centers itself via absolute inset */}
         <Suspense fallback={null}>
