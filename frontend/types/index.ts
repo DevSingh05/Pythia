@@ -1,4 +1,4 @@
-export type MarketCategory = 'politics' | 'crypto' | 'economics' | 'sports' | 'science' | 'geo'
+export type MarketCategory = 'crypto' | 'economics' | 'sports' | 'science' | 'geo'
 
 export interface ProbPoint {
   t: number // unix ms

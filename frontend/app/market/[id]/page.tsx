@@ -200,7 +200,7 @@ export default function MarketPage() {
             <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
-                Resolves {market.resolutionDate} · {market.daysToResolution}d left
+                Resolves {market.resolutionDate} / {market.daysToResolution}d left
               </span>
               <span className="flex items-center gap-1.5">
                 <BarChart2 className="w-3.5 h-3.5" />

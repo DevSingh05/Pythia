@@ -21,7 +21,7 @@ function formatAuthError(err: unknown): string {
     lower.includes('over_request_rate_limit') ||
     msg.includes('429')
   ) {
-    return 'Too many auth requests (Supabase rate limit). Wait 1–2 minutes, avoid refreshing repeatedly, then try again. If this persists, raise Auth rate limits in the Supabase dashboard.'
+    return 'Too many auth requests (Supabase rate limit). Wait 1-2 minutes, avoid refreshing repeatedly, then try again. If this persists, raise Auth rate limits in the Supabase dashboard.'
   }
   return msg
 }
@@ -143,7 +143,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
             size="lg"
             className="w-full justify-center"
           >
-            {loading ? 'Please wait…' : tab === 'login' ? 'Log in' : 'Create account'}
+            {loading ? 'Please wait...' : tab === 'login' ? 'Log in' : 'Create account'}
           </StarButton>
 
           <p className="text-[10px] text-muted text-center">

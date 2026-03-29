@@ -14,13 +14,20 @@ const GAMMA = process.env.NEXT_PUBLIC_POLYMARKET_API ?? 'https://gamma-api.polym
  * A market matches if ANY of its tags match ANY slug in the category.
  */
 const CATEGORY_TAG_MAP: Record<string, string[]> = {
-  politics:    ['politics', 'elections', 'congress', 'trump', 'democrats', 'republicans', 'biden', 'senate', 'governor', 'presidential'],
   crypto:      ['crypto', 'bitcoin', 'ethereum', 'defi', 'nft', 'blockchain', 'solana', 'altcoins', 'exchange'],
   economics:   ['economics', 'economy', 'finance', 'stocks', 'fed', 'inflation', 'gdp', 'interest-rates', 'trade', 'business', 'ipos'],
-  sports:      ['sports', 'nba', 'nfl', 'mlb', 'soccer', 'football', 'basketball', 'baseball', 'tennis', 'mma', 'ufc', 'boxing', 'hockey', 'nhl', 'golf', 'cricket', 'f1', 'racing'],
+  sports:      ['sports', 'nba', 'nfl', 'mlb', 'soccer', 'football', 'basketball', 'baseball', 'tennis', 'mma', 'ufc', 'boxing', 'hockey', 'nhl', 'golf', 'cricket'],
   science:     ['science', 'technology', 'tech', 'ai', 'space', 'climate', 'health', 'medicine', 'biotech'],
   geopolitics: ['geopolitics', 'war', 'china', 'russia', 'ukraine', 'nato', 'middle-east', 'india', 'europe', 'asia', 'iran', 'israel'],
 }
+
+/** Tags always excluded regardless of category filter. */
+const EXCLUDED_TAGS = [
+  // Politics
+  'politics', 'elections', 'congress', 'trump', 'democrats', 'republicans', 'biden', 'senate', 'governor', 'presidential',
+  // Entertainment / racing
+  'eurovision', 'f1', 'racing', 'formula-1', 'formula1',
+]
 
 function parsePrice(outcomePrices: any): number {
   try {
@@ -72,9 +79,12 @@ export async function GET(req: NextRequest) {
     const activeMarkets = mktList.filter((m: any) => !m.closed)
     if (activeMarkets.length === 0) return []
 
+    // Always exclude blocked content
+    const eventTags = (event.tags ?? []).map((t: any) => (t.slug ?? '').toLowerCase())
+    if (EXCLUDED_TAGS.some(pt => eventTags.includes(pt))) return []
+
     // Category filtering: check if event tags match the selected category
     if (categoryTags.length > 0) {
-      const eventTags = (event.tags ?? []).map((t: any) => (t.slug ?? '').toLowerCase())
       const matches = categoryTags.some(ct => eventTags.includes(ct))
       if (!matches) return []
     }

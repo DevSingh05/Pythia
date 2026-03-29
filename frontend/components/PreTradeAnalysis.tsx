@@ -174,11 +174,11 @@ export default function PreTradeAnalysis({
               {market.outcomeLabel && (
                 <span className="text-violet-400/90 font-medium">{market.outcomeLabel}</span>
               )}
-              {market.outcomeLabel && ' · '}
+              {market.outcomeLabel && ' / '}
               <span className={side === 'buy' ? 'text-emerald-400' : 'text-red-400'}>
                 {side.toUpperCase()}
               </span>
-              {' '}{quantity}× {option.type.toUpperCase()} @ {fmtProb(option.strike)} · {option.expiry}
+              {' '}{quantity}x {option.type.toUpperCase()} @ {fmtProb(option.strike)} / {option.expiry}
             </p>
           </div>
           <button

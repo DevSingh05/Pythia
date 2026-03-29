@@ -178,7 +178,7 @@ export default function OptionsChain({
           IV <span className="text-zinc-300 font-mono tabular-nums font-medium">{(chain.impliedVol * 100).toFixed(1)}%</span>
         </span>
         <span className="text-zinc-600 text-[11px]">
-          {view === 'tformat' ? 'Calls ← Strike → Puts' : type === 'call' ? 'Calls profit above strike' : 'Puts profit below strike'}
+          {view === 'tformat' ? 'Calls | Strike | Puts' : type === 'call' ? 'Calls profit above strike' : 'Puts profit below strike'}
         </span>
         <div className="flex items-center gap-2">
           <span className="text-zinc-500">
@@ -305,8 +305,8 @@ export default function OptionsChain({
       <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-900/40 text-center">
         <span className="text-[10px] text-zinc-600">
           {view === 'tformat'
-            ? `${tFormatRows.length} strikes · Calls & Puts · ${selectedExpiry} expiry`
-            : `${listOptions.length} contracts · ${type === 'call' ? 'Call' : 'Put'}s · ${selectedExpiry} expiry`}
+            ? `${tFormatRows.length} strikes / Calls & Puts / ${selectedExpiry} expiry`
+            : `${listOptions.length} contracts / ${type === 'call' ? 'Call' : 'Put'}s / ${selectedExpiry} expiry`}
         </span>
       </div>
     </div>
@@ -436,7 +436,7 @@ function TFormatRow({
             </div>
           </>
         ) : (
-          <div className="col-span-3 text-center text-zinc-600 text-[10px]">—</div>
+          <div className="col-span-3 text-center text-zinc-600 text-[10px]">N/A</div>
         )}
       </button>
 
@@ -507,7 +507,7 @@ function TFormatRow({
             </div>
           </>
         ) : (
-          <div className="col-span-3 text-center text-zinc-600 text-[10px]">—</div>
+          <div className="col-span-3 text-center text-zinc-600 text-[10px]">N/A</div>
         )}
       </button>
     </div>

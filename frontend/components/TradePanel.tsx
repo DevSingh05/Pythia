@@ -92,7 +92,7 @@ export default function TradePanel({
   const handleSubmit = async () => {
     if (demoActive) return
     if (noExecutablePremium) {
-      setOrderError('No quoted premium for this strike — not executable (deep OTM or stale quote).')
+      setOrderError('No quoted premium for this strike - not executable (deep OTM or stale quote).')
       return
     }
     setLoading(true)
@@ -155,7 +155,7 @@ export default function TradePanel({
         </div>
         <p className="text-sm font-medium text-emerald-400">Order submitted</p>
         <p className="text-xs text-zinc-500 text-center">
-          {side === 'buy' ? 'Bought' : 'Sold'} {quantity}× {fmtProb(option.strike)} {option.type.toUpperCase()}
+          {side === 'buy' ? 'Bought' : 'Sold'} {quantity}x {fmtProb(option.strike)} {option.type.toUpperCase()}
         </p>
         <button onClick={() => { setSubmitted(false); setQuantity(1) }} className="text-xs text-blue-400 hover:underline mt-1">
           New order
@@ -173,7 +173,7 @@ export default function TradePanel({
         <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/30 overflow-hidden', className)}>
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border-b border-emerald-500/25 text-emerald-400 text-[10px] font-medium">
             <FlaskConical className="w-3 h-3 shrink-0" />
-            Demo fill complete — paper only, no order placed
+            Demo fill complete - paper only, no order placed
           </div>
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/60">
             <div className="flex items-center gap-2">
@@ -207,7 +207,7 @@ export default function TradePanel({
     <div className={cn('rounded-xl border border-zinc-800 bg-zinc-900/30 overflow-hidden', className)}>
       <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-[10px] font-medium">
         <FlaskConical className="w-3 h-3 shrink-0" />
-        Paper Trading — orders are simulated and tracked in your account
+        Paper Trading - orders are simulated and tracked in your account
       </div>
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/60">
@@ -268,7 +268,7 @@ export default function TradePanel({
 
         {!isDemoFilling && !isDemoProcessing && (
           <div className="flex items-center justify-between px-1">
-            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / lot <span className="text-zinc-600 normal-case">(×1,000 units)</span></span>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / lot <span className="text-zinc-600 normal-case">(x1,000 units)</span></span>
             <span className="text-sm font-mono font-semibold text-zinc-100">${(option.premium * LOT).toFixed(2)}</span>
           </div>
         )}
@@ -324,7 +324,7 @@ export default function TradePanel({
           <div className="flex gap-2 text-xs text-amber-400/90 bg-amber-500/8 border border-amber-500/25 rounded-lg p-2.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
-              Premium is zero or missing — you cannot buy this for free; pick a strike with a positive quote or refresh.
+              Premium is zero or missing. Pick a strike with a positive quote or refresh.
             </span>
           </div>
         )}
@@ -378,17 +378,17 @@ export default function TradePanel({
             {isDemoProcessing ? (
               <span className="inline-flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                Processing…
+                Processing...
               </span>
             ) : demoActive ? (
-              'Demo in progress…'
+              'Demo in progress...'
             ) : loading ? (
               <span className="inline-flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                Processing…
+                Processing...
               </span>
             ) : (
-              `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}× ` : ''}${option.type.toUpperCase()} — $${(totalCost * LOT).toFixed(2)}`
+              `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}x ` : ''}${option.type.toUpperCase()} - $${(totalCost * LOT).toFixed(2)}`
             )}
           </StarButton>
         ) : (
@@ -404,7 +404,7 @@ export default function TradePanel({
         )}
 
         <p className="text-[10px] text-zinc-600 text-center">
-          American exercise · Cash settled · Logit-normal tree
+          American exercise / Cash settled / Logit-normal tree
         </p>
       </div>
     </div>
@@ -455,7 +455,7 @@ function DemoSuccessBody({
         <div>
           <p className="text-sm font-semibold text-emerald-400">Demo order filled</p>
           <p className="text-xs text-zinc-400 mt-1">
-            Bought {quantity}× {option.type.toUpperCase()} @ {fmtPremium(option.premium)} / contract
+            Bought {quantity}x {option.type.toUpperCase()} @ {fmtPremium(option.premium)} / contract
           </p>
         </div>
       </div>
@@ -472,7 +472,7 @@ function DemoSuccessBody({
         </div>
       </div>
       <p className="text-[10px] text-zinc-500">
-        Breakeven YES {(pnl.breakeven * 100).toFixed(1)}% · Max gain {fmtCents(pnl.maxGain)}
+        Breakeven YES {(pnl.breakeven * 100).toFixed(1)}% / Max gain {fmtCents(pnl.maxGain)}
       </p>
       <StarButton type="button" variant="primary" size="md" className="w-full justify-center" onClick={onTryAnother}>
         Try another trade
