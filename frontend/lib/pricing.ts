@@ -293,8 +293,9 @@ export function availableStrikes(
   const L0 = logit(currentProb)
   const sigTau = sigma * Math.sqrt(tau)
 
-  // Step size: ~0.7 standard deviations in logit space, floor at 0.06
-  const step = Math.max(sigTau * 0.7, 0.06)
+  // Step size: ~1.2 standard deviations in logit space, floor at 0.15
+  // Produces ~3-4% gaps in probability space (wider, cleaner chain)
+  const step = Math.max(sigTau * 1.2, 0.15)
 
   const strikes: number[] = []
   const seen = new Set<number>()

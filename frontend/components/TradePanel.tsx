@@ -173,13 +173,7 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         </div>
 
-        {/* Commission */}
-        <div className="flex items-center justify-between bg-zinc-800/30 rounded-lg px-3 py-2 text-xs">
-          <span className="text-zinc-500">Commission</span>
-          <span className="font-mono text-zinc-400">{fmtPremium(COMMISSION_PER_CONTRACT)} × {quantity} = {fmtPremium(commission)}</span>
-        </div>
-
-        {/* Quantity + total */}
+        {/* Quantity selector */}
         <div className="flex items-center justify-between bg-zinc-800/40 rounded-lg px-3 py-2.5">
           <span className="text-xs text-zinc-400">Contracts</span>
           <div className="flex items-center gap-3">
@@ -196,8 +190,22 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
             >
               <Plus className="w-3 h-3" />
             </button>
-            <div className="w-px h-4 bg-zinc-700 mx-1" />
-            <span className={cn('text-sm font-mono tabular-nums font-medium', side === 'buy' ? 'text-red-400' : 'text-emerald-400')}>
+          </div>
+        </div>
+
+        {/* Cost breakdown */}
+        <div className="bg-zinc-800/30 rounded-lg px-3 py-2.5 space-y-1.5 text-xs">
+          <div className="flex justify-between text-zinc-500">
+            <span>Premium</span>
+            <span className="font-mono">{fmtPremium(option.premium)} × {quantity} = {fmtPremium(option.premium * quantity)}</span>
+          </div>
+          <div className="flex justify-between text-zinc-500">
+            <span>Commission</span>
+            <span className="font-mono">{fmtPremium(COMMISSION_PER_CONTRACT)} × {quantity} = {fmtPremium(commission)}</span>
+          </div>
+          <div className="border-t border-zinc-700/50 pt-1.5 flex justify-between font-medium">
+            <span className="text-zinc-400">Total</span>
+            <span className={cn('font-mono', side === 'buy' ? 'text-red-400' : 'text-emerald-400')}>
               {side === 'buy' ? '−' : '+'}{fmtPremium(totalCost)}
             </span>
           </div>

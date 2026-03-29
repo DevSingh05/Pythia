@@ -29,13 +29,18 @@ function useSiblingMarkets(eventSlug: string | undefined) {
   return siblings
 }
 
+/** Detect Polymarket's anonymised outcome labels: "Person X", "Team AB", etc. */
+const ANON_LABEL = /^(Person|Team|Player|Contestant)\s+[A-Z]{1,4}$/
+
 function shortLabel(question: string, groupItemTitle?: string): string {
-  if (groupItemTitle) return groupItemTitle
+  // Use groupItemTitle only if it's a real name, not an anonymised placeholder
+  if (groupItemTitle && !ANON_LABEL.test(groupItemTitle)) return groupItemTitle
+  // Parse the real name from the question text
   const colonIdx = question.lastIndexOf(': ')
-  if (colonIdx !== -1) return question.slice(colonIdx + 2).slice(0, 18)
-  const willMatch = question.match(/^Will (.+?) (?:win|be|get|receive)/i)
-  if (willMatch) return willMatch[1].slice(0, 18)
-  return question.length > 18 ? question.slice(0, 18) + '...' : question
+  if (colonIdx !== -1) return question.slice(colonIdx + 2).slice(0, 20)
+  const willMatch = question.match(/^Will (.+?) (?:win|be|get|receive|become|make|reach|finish)/i)
+  if (willMatch) return willMatch[1].slice(0, 20)
+  return question.length > 20 ? question.slice(0, 20) + '…' : question
 }
 
 /** Parse clobTokenIds from a sibling market object */
