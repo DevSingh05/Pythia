@@ -39,7 +39,7 @@ export interface MarketSnapshot {
 
 // --- Constants ---
 
-export const INITIAL_BALANCE = 10_000
+export const INITIAL_BALANCE = 100
 
 export function generateOrderId(): string {
   return crypto.randomUUID?.() ?? String(Date.now())

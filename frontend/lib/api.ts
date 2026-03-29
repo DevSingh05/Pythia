@@ -316,9 +316,11 @@ export async function fetchVolatility(marketId: string): Promise<VolatilityRespo
 export async function fetchOptionsChain(
   marketId: string,
   expiry?: string,
+  p0Override?: number,
 ): Promise<OptionsChainResponse> {
   const qs = new URLSearchParams()
   if (expiry) qs.set('expiry', expiry)
+  if (p0Override != null && p0Override > 0 && p0Override < 1) qs.set('p0', String(p0Override))
   const q = qs.toString()
   return apiFetch<OptionsChainResponse>(
     `${MARKETS_BASE}/markets/${marketId}/chain${q ? '?' + q : ''}`

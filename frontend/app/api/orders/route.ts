@@ -17,9 +17,9 @@ const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 // Allowed values for strict input validation
 const VALID_TYPES = new Set(['call', 'put'])
 const VALID_SIDES = new Set(['buy', 'sell'])
-const VALID_STRIKES = new Set([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 const MAX_QUANTITY = 1_000
-const EXPIRY_RE = /^\d{4}-\d{2}-\d{2}$/   // YYYY-MM-DD
+// Accepts "30D" / "7D" duration labels from the chain, or a full "YYYY-MM-DD" date
+const EXPIRY_RE = /^(\d+D|\d{4}-\d{2}-\d{2})$/i
 
 function log(label: string, data?: unknown) {
   if (process.env.NODE_ENV !== 'production') {
@@ -115,8 +115,8 @@ function validateOrderBody(body: Record<string, unknown>): string | null {
   if (!marketId || typeof marketId !== 'string' || marketId.trim().length === 0) {
     return 'marketId is required'
   }
-  if (typeof strike !== 'number' || !VALID_STRIKES.has(strike)) {
-    return `strike must be one of: ${[...VALID_STRIKES].join(', ')}`
+  if (typeof strike !== 'number' || !Number.isFinite(strike) || strike <= 0 || strike >= 1) {
+    return 'strike must be a number between 0 and 1 (exclusive)'
   }
   if (!VALID_TYPES.has(type as string)) {
     return 'type must be "call" or "put"'
@@ -128,12 +128,14 @@ function validateOrderBody(body: Record<string, unknown>): string | null {
     return `quantity must be an integer between 1 and ${MAX_QUANTITY}`
   }
   if (typeof expiry !== 'string' || !EXPIRY_RE.test(expiry)) {
-    return 'expiry must be a date string in YYYY-MM-DD format'
+    return 'expiry must be a duration (e.g. "30D") or a date string (YYYY-MM-DD)'
   }
-  // Expiry must be in the future
-  const expiryDate = new Date(expiry + 'T00:00:00Z')
-  if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
-    return 'expiry must be a future date'
+  // Only validate future-date for full date strings; duration labels (e.g. "30D") are always valid
+  if (/^\d{4}-\d{2}-\d{2}$/.test(expiry)) {
+    const expiryDate = new Date(expiry + 'T00:00:00Z')
+    if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
+      return 'expiry must be a future date'
+    }
   }
   if (limitPrice !== undefined && (typeof limitPrice !== 'number' || limitPrice < 0 || limitPrice > 1)) {
     return 'limitPrice must be a number between 0 and 1'
