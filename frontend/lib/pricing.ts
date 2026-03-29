@@ -96,27 +96,36 @@ export function putDelta(p0: number, K: number, sigma: number, tau: number): num
 }
 
 /**
- * Gamma: d²V/dL² — second derivative of option value with respect to
- * logit-space moves (L = logit(p), the natural unbounded coordinate).
+ * Gamma: d²V/dp² normalised to "delta change per 1pp probability move".
  *
- * Computing d²V/dp² directly gives enormous values (30+) near boundary
- * probabilities because the logit Jacobian dL/dp = 1/(p(1-p)) amplifies
- * curvature. By working entirely in logit space, Gamma stays bounded
- * and interpretable (typically 0.00 to ~0.10).
+ * Why not d²V/dp² raw?
+ *   The [0,1] probability range creates curvature ~100x stock-world gamma
+ *   (values of 25-30 at ATM). Unintuitive for traders.
  *
- * Interpretation: "How much option value accelerates per unit² logit move."
- * Analogous to standard BS Gamma (d²V/dS²) where S = logit price.
+ * Why not d²V/dL² (logit-space)?
+ *   Goes negative for deep ITM because sigmoid''(L) < 0 when p > 0.5.
+ *   A long call showing negative gamma is misleading.
+ *
+ * Solution: probability-space d²V/dp² × 0.01 ("per 1pp").
+ *   - Always non-negative for long vanilla options
+ *   - Peaks ATM (~0.25), tapers to ~0 deep ITM/OTM
+ *   - Comparable magnitude to stock-world gamma (~0.02)
+ *   - Interpretation: "if probability moves 1pp, delta changes by Γ"
  */
-export function gamma(p0: number, K: number, sigma: number, tau: number): number {
-  const L0 = logit(p0)
-  const eps = 0.05  // logit-space bump (wider for stable second derivative)
-  const pUp = sigmoid(L0 + eps)
-  const pMid = p0
-  const pDn = sigmoid(L0 - eps)
-  const vUp = vanillaCall(pUp, K, sigma, tau)
-  const vMid = vanillaCall(pMid, K, sigma, tau)
-  const vDn = vanillaCall(pDn, K, sigma, tau)
-  return (vUp - 2 * vMid + vDn) / (eps * eps)
+export function callGamma(p0: number, K: number, sigma: number, tau: number): number {
+  const dp = 0.005 // half-pp bump for stable second derivative
+  const pUp = clampP(p0 + dp)
+  const pDn = clampP(p0 - dp)
+  const raw = (vanillaCall(pUp, K, sigma, tau) - 2 * vanillaCall(p0, K, sigma, tau) + vanillaCall(pDn, K, sigma, tau)) / (dp * dp)
+  return raw * 0.01 // normalise to delta-change per 1pp
+}
+
+export function putGamma(p0: number, K: number, sigma: number, tau: number): number {
+  const dp = 0.005
+  const pUp = clampP(p0 + dp)
+  const pDn = clampP(p0 - dp)
+  const raw = (vanillaPut(pUp, K, sigma, tau) - 2 * vanillaPut(p0, K, sigma, tau) + vanillaPut(pDn, K, sigma, tau)) / (dp * dp)
+  return raw * 0.01
 }
 
 /**
@@ -193,34 +202,38 @@ const STRIKE_GRID = [
 ]
 
 /**
- * Dynamic strike selection: only include strikes within nStd logit-space
+ * Dynamic strike selection: include strikes within nStd logit-space
  * standard deviations from the current probability.
  * Mirrors Python backend available_strikes() logic.
- * Guarantees at least 4 strikes around ATM even in low/high probability markets.
+ * Guarantees at least minStrikes around ATM even in low/high probability
+ * or short-dated/low-vol markets.
  */
 export function availableStrikes(
   currentProb: number,
   sigma: number,
   tauDays: number,
   nStd = 2.5,
+  minStrikes = 7,
 ): number[] {
   const tau = tauDays / 365
   const L0 = logit(currentProb)
   const sigTau = sigma * Math.sqrt(tau)
-  const Llo = L0 - nStd * sigTau
-  const Lhi = L0 + nStd * sigTau
+  // Minimum logit-space half-width so short-dated/low-vol markets
+  // still show a meaningful chain
+  const halfWidth = Math.max(nStd * sigTau, 0.8)
+  const Llo = L0 - halfWidth
+  const Lhi = L0 + halfWidth
 
   const filtered = STRIKE_GRID.filter(K => {
     const LK = logit(K)
     return LK >= Llo && LK <= Lhi
   })
 
-  // Always guarantee at least 4 strikes
-  if (filtered.length >= 4) return filtered
+  if (filtered.length >= minStrikes) return filtered
 
-  // Fall back: find closest strikes in logit space
+  // Fall back: pad with closest strikes in logit space
   const sorted = [...STRIKE_GRID].sort((a, b) => Math.abs(logit(a) - L0) - Math.abs(logit(b) - L0))
-  return [...new Set([...filtered, ...sorted.slice(0, 6)])].sort((a, b) => a - b)
+  return [...new Set([...filtered, ...sorted.slice(0, minStrikes)])].sort((a, b) => a - b)
 }
 
 export function buildOptionsChain(
@@ -255,7 +268,7 @@ export function buildOptionsChain(
       premiumChange: change,
       premiumChangePct: prevPremium > 0 ? change / prevPremium : 0,
       delta: callDelta(currentProb, K, sigma, tau),
-      gamma: gamma(currentProb, K, sigma, tau),
+      gamma: callGamma(currentProb, K, sigma, tau),
       theta: callTheta(currentProb, K, sigma, tau),
       vega: callVega(currentProb, K, sigma, tau),
       breakeven,
@@ -281,7 +294,7 @@ export function buildOptionsChain(
       premiumChange: change,
       premiumChangePct: prevPremium > 0 ? change / prevPremium : 0,
       delta: putDelta(currentProb, K, sigma, tau),
-      gamma: gamma(currentProb, K, sigma, tau),
+      gamma: putGamma(currentProb, K, sigma, tau),
       theta: putTheta(currentProb, K, sigma, tau),
       vega: putVega(currentProb, K, sigma, tau),
       breakeven,
