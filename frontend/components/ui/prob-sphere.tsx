@@ -19,7 +19,6 @@ export function ProbSphere() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     el.appendChild(renderer.domElement)
 
-    // ── Shared GLSL: simplex noise ────────────────────────────────────────
     const NOISE = `
       vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
       vec4 mod289(vec4 x){return x-floor(x*(1./289.))*289.;}
@@ -49,97 +48,124 @@ export function ProbSphere() {
       }
     `
 
-    // ── 1. SOFT SHADOW DISC beneath orb ──────────────────────────────────
-    const shadowGeo = new THREE.CircleGeometry(1.4, 64)
+    // ── 1. SHADOW DISC ────────────────────────────────────────────────────
+    const shadowGeo = new THREE.CircleGeometry(1.6, 64)
     const shadowMat = new THREE.ShaderMaterial({
       uniforms: { time: { value: 0 } },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
       fragmentShader: `
-        varying vec2 vUv;
-        uniform float time;
+        varying vec2 vUv; uniform float time;
         void main(){
-          vec2 c = vUv - 0.5;
+          // elongated slightly left
+          vec2 c = (vUv - vec2(0.52, 0.5)) * vec2(1.0, 0.55);
           float r = length(c);
-          float pulse = sin(time*0.9)*0.05 + 0.95;
-          float alpha = smoothstep(0.5, 0.0, r) * 0.45 * pulse;
-          gl_FragColor = vec4(0.35, 0.05, 0.55, alpha);
+          float pulse = sin(time*0.7)*0.04 + 0.96;
+          float a = smoothstep(0.48, 0.0, r) * 0.38 * pulse;
+          gl_FragColor = vec4(0.42, 0.18, 0.62, a);
         }
       `,
-      transparent: true,
-      depthWrite: false,
+      transparent: true, depthWrite: false,
     })
     const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat)
     shadowMesh.rotation.x = -Math.PI / 2
-    shadowMesh.position.set(0, -2.05, -0.5)
+    shadowMesh.position.set(0.1, -2.0, -0.3)
     scene.add(shadowMesh)
 
-    // ── 2. MARBLE INTERIOR — BackSide, swirling purple ────────────────────
-    const interiorGeo = new THREE.SphereGeometry(1.72, 128, 128)
-    const interiorMat = new THREE.ShaderMaterial({
+    // ── 2. MIST INTERIOR — BackSide ───────────────────────────────────────
+    // Rendered from inside: we see the back face, giving us the volumetric
+    // depth illusion. Front-to-back: bright lavender-white → deep indigo.
+    const mistGeo = new THREE.SphereGeometry(1.71, 128, 128)
+    const mistMat = new THREE.ShaderMaterial({
       uniforms: { time: { value: 0 } },
       vertexShader: `
-        varying vec3 vPos; varying vec3 vNorm;
-        void main(){ vPos=position; vNorm=normal; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }
+        varying vec3 vPos;
+        void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }
       `,
       fragmentShader: `
         ${NOISE}
         uniform float time;
-        varying vec3 vPos; varying vec3 vNorm;
+        varying vec3 vPos;
 
-        // FBM for marble veins
-        float fbm(vec3 p){
-          float v=0.; float a=0.5;
-          for(int i=0;i<5;i++){ v+=a*snoise(p); p*=2.1; a*=0.5; }
+        // 2-octave FBM — low frequency, keeps it vaporous not marbled
+        float mistFbm(vec3 p){
+          float v = snoise(p)       * 0.60;
+              v += snoise(p*2.1)    * 0.28;
+              v += snoise(p*4.3)    * 0.12;
           return v;
         }
 
         void main(){
           vec3 p = normalize(vPos);
+          float t = time * 0.06; // very slow drift
 
-          // swirling marble pattern — slow drift
-          float t = time * 0.08;
-          vec3 q = vec3(fbm(p + vec3(0.,0.,t)), fbm(p + vec3(5.2,1.3,t)), fbm(p + vec3(2.1,8.4,t)));
-          float marble = fbm(p + 2.8*q + vec3(t*0.3));
-          marble = marble * 0.5 + 0.5;
+          // domain warp — one level, gentle, keeps vapour feel
+          vec3 q = vec3(
+            mistFbm(p*1.2 + vec3(0.0,  0.0,  t)),
+            mistFbm(p*1.2 + vec3(2.8,  1.6,  t)),
+            mistFbm(p*1.2 + vec3(5.1, -2.3,  t))
+          );
+          float mist = mistFbm(p*1.4 + 1.8*q + vec3(t*0.4));
+          mist = mist * 0.5 + 0.5; // [0,1]
 
-          // deep violet → mid purple → bright lavender
-          vec3 c0 = vec3(0.10, 0.02, 0.22); // deep shadow
-          vec3 c1 = vec3(0.42, 0.12, 0.72); // purple body
-          vec3 c2 = vec3(0.72, 0.50, 1.00); // light vein
-          vec3 c3 = vec3(0.90, 0.82, 1.00); // near-white highlight
+          // soft breathing bands — brightness variation, not hard lines
+          // low multiplier (6.0) = wide, gentle undulations like the reference
+          float bands = sin(mist * 9.0 + t * 0.5) * 0.5 + 0.5;
+          bands = smoothstep(0.0, 1.0, bands); // fully soft, no crisp edges
 
-          vec3 col = mix(c0, c1, smoothstep(0.0, 0.4, marble));
-          col      = mix(col, c2, smoothstep(0.4, 0.7, marble));
-          col      = mix(col, c3, smoothstep(0.72, 0.88, marble));
+          float pattern = mist * 0.65 + bands * 0.35;
 
-          // soft inner radial brightness — orb glows from inside
-          float radial = 1.0 - length(vPos)/1.72;
-          col += vec3(0.3, 0.1, 0.5) * pow(radial, 2.2) * 0.6;
+          // ── colour: back=deep indigo, mid=purple, front=lavender-white ──
+          // "depth" proxy: faces pointing away from camera are the back
+          // vPos.z on BackSide: negative z = facing viewer = front of mist
+          float depth = clamp((-vPos.z / 1.71) * 0.5 + 0.5, 0., 1.);
 
-          gl_FragColor = vec4(col, 1.0);
+          vec3 cBack  = vec3(0.08, 0.02, 0.28); // deep violet-indigo (back)
+          vec3 cMid   = vec3(0.38, 0.10, 0.72); // purple body
+          vec3 cFront = vec3(0.72, 0.52, 0.98); // lavender (front)
+          vec3 cCore  = vec3(0.92, 0.86, 1.00); // near-white glow centre
+
+          // blend depth layers
+          vec3 depthCol = mix(cBack, cMid,   smoothstep(0.0, 0.45, depth));
+          depthCol      = mix(depthCol, cFront, smoothstep(0.45, 0.78, depth));
+
+          // pattern brightens within the depth layer
+          vec3 col = mix(depthCol * 0.7, depthCol * 1.25, pattern);
+
+          // internal light source: front-left off-centre bright spot
+          // simulate as a gaussian blob in position space
+          vec3 lightCentre = vec3(-0.3, 0.1, 1.0); // front-left
+          float distToLight = length(normalize(vPos) - normalize(lightCentre));
+          float glow = exp(-distToLight * distToLight * 2.8);
+          col = mix(col, cCore, glow * 0.65);
+
+          // overall alpha: opaque in the deep back, slightly transparent front
+          float alpha = mix(0.96, 0.82, depth);
+
+          gl_FragColor = vec4(col, alpha);
         }
       `,
+      transparent: true,
       side: THREE.BackSide,
       depthWrite: false,
     })
-    const interiorMesh = new THREE.Mesh(interiorGeo, interiorMat)
-    scene.add(interiorMesh)
+    const mistMesh = new THREE.Mesh(mistGeo, mistMat)
+    scene.add(mistMesh)
 
-    // ── 3. GLASS SHELL — transparent with refraction rim + star specular ──
+    // ── 3. GLASS SHELL — FrontSide, near-invisible centre ─────────────────
     const glassGeo = new THREE.SphereGeometry(1.75, 128, 128)
     const glassMat = new THREE.ShaderMaterial({
       uniforms: {
         time:     { value: 0 },
-        lightPos: { value: new THREE.Vector3(1.2, 1.5, 3.5) },
+        lightPos: { value: new THREE.Vector3(1.8, 1.6, 3.5) },
       },
       vertexShader: `
         varying vec3 vNormal; varying vec3 vPosition; varying vec3 vViewDir;
         void main(){
-          vNormal   = normalize(normalMatrix * normal);
-          vec4 mvPos = modelViewMatrix * vec4(position,1.);
-          vPosition  = mvPos.xyz;
-          vViewDir   = normalize(-mvPos.xyz);
-          gl_Position = projectionMatrix * mvPos;
+          vNormal  = normalize(normalMatrix * normal);
+          vec4 mv  = modelViewMatrix * vec4(position, 1.);
+          vPosition = mv.xyz;
+          vViewDir  = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
         }
       `,
       fragmentShader: `
@@ -147,49 +173,54 @@ export function ProbSphere() {
         uniform vec3  lightPos;
         varying vec3  vNormal; varying vec3 vPosition; varying vec3 vViewDir;
 
-        // 4-ray star burst for specular
-        float starBurst(vec2 uv, float sharpness){
+        // Needle-thin 4-ray star — short rays, white-gold
+        float starFlare(vec2 uv){
           float r = length(uv);
           float a = atan(uv.y, uv.x);
-          float rays = abs(cos(a*2.0)) * abs(cos(a*2.0 + 0.7854));
-          return pow(rays / (r*sharpness + 0.001), 1.5);
+          // two perpendicular ray pairs, very high power = needle-thin
+          float ray1 = pow(abs(cos(a)),        28.0);
+          float ray2 = pow(abs(cos(a - 0.7854)), 28.0);
+          float rays = ray1 * 0.55 + ray2 * 0.45;
+          // short: exp falloff, tighter than before
+          return rays * exp(-r * 11.0);
         }
 
         void main(){
           vec3 n = normalize(vNormal);
           vec3 v = normalize(vViewDir);
 
-          // Fresnel — glass edge
-          float NdV    = max(dot(n, v), 0.0);
-          float fresnel = pow(1.0 - NdV, 4.5);
+          float NdV     = max(dot(n, v), 0.0);
+          // power 5 = thin rim, nearly invisible centre
+          float fresnel = pow(1.0 - NdV, 5.0);
 
-          // Rim colour — blue-violet iridescence like reference
-          vec3 rimA = vec3(0.2, 0.4, 1.0);  // blue
-          vec3 rimB = vec3(0.7, 0.2, 1.0);  // violet
-          float shift = sin(fresnel * 8.0 + time * 0.5) * 0.5 + 0.5;
-          vec3 rimColor = mix(rimA, rimB, shift);
+          // chromatic rim: top=blue-violet, bottom=deeper indigo
+          // use world-space y (approximate via vNormal.y)
+          float yBias  = vNormal.y * 0.5 + 0.5; // 0=bottom, 1=top
+          vec3 rimTop  = vec3(0.30, 0.45, 1.00); // blue-violet
+          vec3 rimBot  = vec3(0.20, 0.08, 0.60); // deeper indigo
+          vec3 rimColor = mix(rimBot, rimTop, yBias);
+          // subtle iridescent shimmer along the rim
+          float shift  = sin(fresnel * 7.0 + time * 0.4) * 0.3 + 0.7;
+          rimColor     = mix(rimColor, vec3(0.55, 0.30, 1.0), shift * fresnel * 0.4);
 
-          // Star specular — sharp point highlight like reference image
-          vec3 lDir  = normalize(lightPos - vPosition);
-          vec3 hDir  = normalize(lDir + v);
-          float NdH  = max(dot(n, hDir), 0.0);
+          // ── golden star flare, upper-right, faint ──────────────────────
+          vec3  lDir = normalize(lightPos - vPosition);
+          vec3  refl = reflect(-lDir, n);
+          float base = pow(max(dot(refl, v), 0.0), 180.0);
 
-          // project highlight onto screen-space for star shape
-          vec3 refl  = reflect(-lDir, n);
-          float base = pow(max(dot(refl, v), 0.0), 120.0);
+          // offset in reflection space → upper-right quadrant
+          vec2  starUV    = refl.xy - vec2(0.25, 0.20);
+          float star      = starFlare(starUV) * 0.42; // faint
+          star            = clamp(star, 0.0, 1.0);
 
-          // star rays in reflection space
-          vec2 reflXY = refl.xy;
-          float star  = starBurst(reflXY * 2.0, 3.0) * base * 2.5;
-          star = clamp(star, 0.0, 1.0);
+          vec3 goldWhite  = mix(vec3(1.0, 0.90, 0.55), vec3(1.0), star);
+          vec3 specColor  = goldWhite * (star + base * 0.2);
 
-          vec3 specColor = mix(vec3(0.8, 0.7, 1.0), vec3(1.0), star) * (base * 0.6 + star * 0.9);
+          // ── assemble ───────────────────────────────────────────────────
+          vec3  col   = rimColor * fresnel * 0.8 + specColor;
+          float alpha = fresnel * 0.60 + star * 0.45 + base * 0.15;
 
-          // assemble — glass is nearly invisible in centre, vivid on rim
-          vec3 finalColor = rimColor * fresnel * 0.9 + specColor;
-          float alpha     = fresnel * 0.7 + base * 0.5 + star * 0.6;
-
-          gl_FragColor = vec4(finalColor, clamp(alpha, 0.0, 1.0));
+          gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
         }
       `,
       transparent: true,
@@ -200,62 +231,59 @@ export function ProbSphere() {
     const glassMesh = new THREE.Mesh(glassGeo, glassMat)
     scene.add(glassMesh)
 
-    // ── 4. OUTER GLOW HALO ────────────────────────────────────────────────
-    const haloGeo = new THREE.SphereGeometry(2.1, 32, 32)
+    // ── 4. OUTER BREATH HALO ──────────────────────────────────────────────
+    const haloGeo = new THREE.SphereGeometry(2.05, 32, 32)
     const haloMat = new THREE.ShaderMaterial({
       uniforms: { time: { value: 0 } },
       vertexShader: `varying vec3 vN; void main(){ vN=normal; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
       fragmentShader: `
-        uniform float time;
-        varying vec3 vN;
+        uniform float time; varying vec3 vN;
         void main(){
-          float f = pow(1.-abs(dot(normalize(vN), vec3(0.,0.,1.))), 5.0);
-          float p = sin(time*0.8)*0.08 + 0.92;
-          gl_FragColor = vec4(0.55, 0.15, 0.85, f * 0.28 * p);
+          float f = pow(1.-abs(dot(normalize(vN),vec3(0.,0.,1.))), 5.5);
+          float p = sin(time*0.75)*0.07+0.93;
+          gl_FragColor = vec4(0.48, 0.12, 0.80, f*0.22*p);
         }
       `,
-      transparent: true,
-      side: THREE.BackSide,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
+      transparent: true, side: THREE.BackSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
     })
     const haloMesh = new THREE.Mesh(haloGeo, haloMat)
     scene.add(haloMesh)
 
     // ── Lights ────────────────────────────────────────────────────────────
-    const keyLight = new THREE.PointLight(0xd0a0ff, 3.5, 20)
-    keyLight.position.set(1.5, 2.0, 4.0)
+    const keyLight = new THREE.PointLight(0xbb88ff, 2.5, 18)
+    keyLight.position.set(1.8, 1.6, 4.0)
     scene.add(keyLight)
 
-    const fillLight = new THREE.PointLight(0x4400bb, 1.5, 15)
-    fillLight.position.set(-3, -1, 2)
+    const fillLight = new THREE.PointLight(0x330088, 1.2, 14)
+    fillLight.position.set(-2.5, -0.5, 2)
     scene.add(fillLight)
 
-    scene.add(new THREE.AmbientLight(0x110022, 1.0))
+    scene.add(new THREE.AmbientLight(0x0d0020, 1.0))
 
-    // ── Mouse — moves specular star ───────────────────────────────────────
+    // ── Mouse: subtle drift, sparkle stays upper-right ────────────────────
     const handleMouseMove = (e: MouseEvent) => {
-      const x = (e.clientX / window.innerWidth  - 0.5) * 6
-      const y = (e.clientY / window.innerHeight - 0.5) * -4
-      glassMat.uniforms.lightPos.value.set(x + 1.2, y + 1.5, 3.5)
-      keyLight.position.set(x + 1.5, y + 2.0, 4.0)
+      const mx = (e.clientX / window.innerWidth  - 0.5) * 1.0
+      const my = (e.clientY / window.innerHeight - 0.5) * -0.7
+      glassMat.uniforms.lightPos.value.set(1.8 + mx, 1.6 + my, 3.5)
+      keyLight.position.set(1.8 + mx, 1.6 + my, 4.0)
     }
 
     // ── Animate ───────────────────────────────────────────────────────────
     let frameId: number
     const animate = (t: number) => {
       const time = t * 0.001
-      interiorMat.uniforms.time.value = time
-      glassMat.uniforms.time.value    = time
-      haloMat.uniforms.time.value     = time
-      shadowMat.uniforms.time.value   = time
+      mistMat.uniforms.time.value  = time
+      glassMat.uniforms.time.value = time
+      haloMat.uniforms.time.value  = time
+      shadowMat.uniforms.time.value = time
 
-      // Slow, dignified rotation
-      interiorMesh.rotation.y += 0.0012
-      interiorMesh.rotation.x += 0.0003
-      glassMesh.rotation.y     = interiorMesh.rotation.y
-      glassMesh.rotation.x     = interiorMesh.rotation.x
-      haloMesh.rotation.y      = interiorMesh.rotation.y * 0.4
+      // slow dignified rotation
+      mistMesh.rotation.y  += 0.0010
+      mistMesh.rotation.x  += 0.0002
+      glassMesh.rotation.y  = mistMesh.rotation.y
+      glassMesh.rotation.x  = mistMesh.rotation.x
+      haloMesh.rotation.y   = mistMesh.rotation.y * 0.35
 
       renderer.render(scene, camera)
       frameId = requestAnimationFrame(animate)
@@ -278,7 +306,7 @@ export function ProbSphere() {
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('mousemove', handleMouseMove)
       renderer.dispose()
-      ;[interiorGeo, interiorMat, glassGeo, glassMat,
+      ;[mistGeo, mistMat, glassGeo, glassMat,
         haloGeo, haloMat, shadowGeo, shadowMat].forEach((o: any) => o.dispose?.())
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement)
     }
