@@ -10,6 +10,9 @@ import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
 import { generateOrderId } from '@/lib/paperTrade'
+import DemoOrderBook from './demo/DemoOrderBook'
+import DemoPremiumTicker from './demo/DemoPremiumTicker'
+import type { UseDemoModeReturn } from '@/hooks/useDemoMode'
 
 interface TradePanelProps {
   market: AppMarket
@@ -17,6 +20,7 @@ interface TradePanelProps {
   side: 'buy' | 'sell'
   onSideChange: (s: 'buy' | 'sell') => void
   className?: string
+  demoMode?: UseDemoModeReturn
 }
 
 export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { cn, fmtProb } from '@/lib/utils'
 import { OptionsChainResponse, OptionQuote } from '@/lib/api'
 import OptionRow, { OptionChainHeader } from './OptionRow'
+import { liquidityHeat } from '@/lib/demoSimulation'
 
 interface OptionsChainProps {
   chain: OptionsChainResponse
@@ -12,6 +13,10 @@ interface OptionsChainProps {
   selectedOption: OptionQuote | null
   showGreeks?: boolean
   className?: string
+  // Demo mode
+  isDemoMode?: boolean
+  demoHighlightStrike?: number  // strike of the option being demo'd
+  demoPhase?: string
 }
 
 type Side = 'buy' | 'sell'
@@ -24,6 +29,9 @@ export default function OptionsChain({
   selectedOption,
   showGreeks = true,
   className,
+  isDemoMode = false,
+  demoHighlightStrike,
+  demoPhase,
 }: OptionsChainProps) {
   const [side, setSide] = useState<Side>('buy')
   const [type, setType] = useState<ContractType>('call')
@@ -175,6 +183,9 @@ export default function OptionsChain({
             onSelect={onSelectOption}
             selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
             showGreeks={showGreeks}
+            liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
+            isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
+            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
           />
         ))}
       </div>
@@ -202,6 +213,9 @@ export default function OptionsChain({
           onSelect={onSelectOption}
           selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
           showGreeks={showGreeks}
+          liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
+          isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
+          isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
         />
       ))}
 
@@ -215,6 +229,9 @@ export default function OptionsChain({
             onSelect={onSelectOption}
             selected={selectedOption?.strike === opt.strike && selectedOption?.type === opt.type}
             showGreeks={showGreeks}
+            liquidityScore={isDemoMode ? liquidityHeat(opt) : 0}
+            isDemoHighlighted={isDemoMode && demoHighlightStrike === opt.strike}
+            isDemoSelecting={isDemoMode && demoPhase === 'selecting' && demoHighlightStrike === opt.strike}
           />
         ))}
       </div>
