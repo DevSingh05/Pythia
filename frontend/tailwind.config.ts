@@ -27,8 +27,9 @@ const config: Config = {
         'muted-fg':   '#a1a1aa',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans:    ['Inter', 'system-ui', 'sans-serif'],
+        mono:    ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        display: ['Orbitron', 'system-ui', 'sans-serif'],
       },
       animation: {
         'fade-in':  'fadeIn 0.2s ease-out',
