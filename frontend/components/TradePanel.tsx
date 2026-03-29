@@ -7,6 +7,8 @@ import PayoffChart from './PayoffChart'
 import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
+import { usePaperTrades } from '@/hooks/usePaperTrades'
+import { generateOrderId } from '@/lib/paperTrade'
 
 interface TradePanelProps {
   market: AppMarket
@@ -18,6 +20,7 @@ interface TradePanelProps {
 
 export default function TradePanel({ market, option, side, onSideChange, className }: TradePanelProps) {
   const { user, getToken } = useAuth()
+  const { addOrder } = usePaperTrades()
   const [showAuth, setShowAuth] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [submitted, setSubmitted] = useState(false)
@@ -61,6 +64,29 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
         },
         token ?? '',
       )
+
+      const paperResult = addOrder({
+        id: generateOrderId(),
+        timestamp: Date.now(),
+        marketId: market.id,
+        marketTitle: market.title,
+        currentProbAtFill: market.currentProb,
+        strike: option.strike,
+        type: option.type,
+        expiry: option.expiry,
+        daysToExpiry: market.daysToResolution,
+        side,
+        quantity,
+        premium: option.premium,
+        totalCost: option.premium * quantity,
+        impliedVol: option.impliedVol,
+        status: 'filled',
+      })
+      if (!paperResult.success) {
+        setOrderError(paperResult.error ?? 'Paper balance insufficient')
+        return
+      }
+
       setSubmitted(true)
     } catch (e) {
       setOrderError((e as Error).message)
