@@ -15,6 +15,7 @@ import { fetchMarket, fetchVolatility, fetchAmericanPrice, Position } from '@/li
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, RotateCcw, Wallet, Briefcase } from 'lucide-react'
+import { StarButton } from '@/components/ui/star-button'
 
 export default function PortfolioPage() {
   const {
@@ -151,24 +152,18 @@ export default function PortfolioPage() {
               </span>
             </div>
 
-            <button
+            <StarButton
+              size="sm"
+              variant="ghost"
               onClick={handleManualRefresh}
               disabled={refreshing}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border',
-                'text-xs text-muted hover:text-zinc-200 hover:border-zinc-600 bg-surface transition-colors',
-                refreshing && 'opacity-60 cursor-not-allowed'
-              )}
             >
               <RotateCcw className={cn('w-3 h-3', refreshing && 'animate-spin')} />
               Refresh
-            </button>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red/30 text-xs text-red/70 hover:text-red hover:border-red/50 bg-surface transition-colors"
-            >
+            </StarButton>
+            <StarButton size="sm" variant="danger" onClick={handleReset}>
               Reset
-            </button>
+            </StarButton>
           </div>
         </div>
 

@@ -7,6 +7,7 @@ import { Search, LogOut, Briefcase } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
+import { StarButton } from './ui/star-button'
 
 interface NavbarProps {
   searchQuery?: string
@@ -84,15 +85,9 @@ export default function Navbar({ searchQuery = '', onSearch }: NavbarProps) {
           {/* Auth controls */}
           <div className="ml-auto flex items-center gap-2">
             {!loading && !user && (
-              <button
-                onClick={() => setShowAuth(true)}
-                className={cn(
-                  'px-3 py-1.5 rounded-md border border-border text-sm text-zinc-300',
-                  'bg-surface hover:bg-card hover:border-zinc-600 transition-colors'
-                )}
-              >
+              <StarButton size="sm" onClick={() => setShowAuth(true)}>
                 Log in / Sign up
-              </button>
+              </StarButton>
             )}
 
             {!loading && user && (
