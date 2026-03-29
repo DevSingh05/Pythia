@@ -20,6 +20,9 @@ const VEGA_BUMP         = 0.01    // 1% absolute vol bump
 const THETA_DT          = 1 / 365 // 1 calendar day
 const DAYS_PER_YEAR     = 365     // calendar days (Polymarket resolves any day)
 
+/** Contract notional — each contract pays $100 at max */
+export const CONTRACT_NOTIONAL = 100
+
 /** Per-contract commission in dollars (2¢) */
 export const COMMISSION_PER_CONTRACT = 0.02
 
@@ -345,13 +348,15 @@ export function buildOptionsChain(
 
   const comm = COMMISSION_PER_CONTRACT
 
+  const N = CONTRACT_NOTIONAL // $100 per contract
+
   const calls: OptionData[] = useStrikes.map((K, i) => {
-    const premium = vanillaCall(currentProb, K, sigma, tau)
+    const premium = vanillaCall(currentProb, K, sigma, tau) * N
     const rng = seed(K * 100 + i)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
     const change = premium - prevPremium
-    // Call breakeven at expiry: need p_T > K + premium + commission to profit
-    const breakeven = Math.min(0.999, K + premium + comm)
+    // Call breakeven at expiry: need p_T > K + premium/N + comm/N to profit
+    const breakeven = Math.min(0.999, K + premium / N + comm / N)
 
     return {
       strike: K,
@@ -361,10 +366,10 @@ export function buildOptionsChain(
       premium,
       premiumChange: change,
       premiumChangePct: prevPremium > 0 ? change / prevPremium : 0,
-      delta: callDelta(currentProb, K, sigma, tau),
-      gamma: callGamma(currentProb, K, sigma, tau),
-      theta: callTheta(currentProb, K, sigma, tau),
-      vega: callVega(currentProb, K, sigma, tau),
+      delta: callDelta(currentProb, K, sigma, tau) * N,
+      gamma: callGamma(currentProb, K, sigma, tau) * N,
+      theta: callTheta(currentProb, K, sigma, tau) * N,
+      vega: callVega(currentProb, K, sigma, tau) * N,
       breakeven,
       breakevenDelta: breakeven - currentProb,
       isITM: currentProb > K,
@@ -373,12 +378,12 @@ export function buildOptionsChain(
   })
 
   const puts: OptionData[] = useStrikes.map((K, i) => {
-    const premium = vanillaPut(currentProb, K, sigma, tau)
+    const premium = vanillaPut(currentProb, K, sigma, tau) * N
     const rng = seed(K * 200 + i * 3)
     const prevPremium = premium * (1 + (rng - 0.5) * 0.4)
     const change = premium - prevPremium
-    // Put breakeven at expiry: need p_T < K - premium - commission to profit
-    const breakeven = Math.max(0.001, K - premium - comm)
+    // Put breakeven at expiry: need p_T < K - premium/N - comm/N to profit
+    const breakeven = Math.max(0.001, K - premium / N - comm / N)
 
     return {
       strike: K,
@@ -388,10 +393,10 @@ export function buildOptionsChain(
       premium,
       premiumChange: change,
       premiumChangePct: prevPremium > 0 ? change / prevPremium : 0,
-      delta: putDelta(currentProb, K, sigma, tau),
-      gamma: putGamma(currentProb, K, sigma, tau),
-      theta: putTheta(currentProb, K, sigma, tau),
-      vega: putVega(currentProb, K, sigma, tau),
+      delta: putDelta(currentProb, K, sigma, tau) * N,
+      gamma: putGamma(currentProb, K, sigma, tau) * N,
+      theta: putTheta(currentProb, K, sigma, tau) * N,
+      vega: putVega(currentProb, K, sigma, tau) * N,
       breakeven,
       breakevenDelta: currentProb - breakeven,
       isITM: currentProb < K,
@@ -399,7 +404,27 @@ export function buildOptionsChain(
     }
   })
 
-  return { calls, puts, expiries: EXPIRIES }
+  // Filter out strikes where all Greeks are effectively zero (too far OTM/ITM
+  // for the current expiry). Keep at least 5 of each type — nearest to ATM.
+  function isMeaningful(o: OptionData): boolean {
+    return (
+      Math.abs(o.delta) >= 0.05 ||
+      Math.abs(o.vega)  >= 0.005 ||
+      Math.abs(o.gamma) >= 0.0005
+    )
+  }
+
+  function keepNearest(arr: OptionData[], min: number): OptionData[] {
+    const filtered = arr.filter(isMeaningful)
+    if (filtered.length >= min) return filtered
+    // Fall back: take the `min` options closest to currentProb
+    return [...arr]
+      .sort((a, b) => Math.abs(a.strike - currentProb) - Math.abs(b.strike - currentProb))
+      .slice(0, min)
+      .sort((a, b) => a.strike - b.strike)
+  }
+
+  return { calls: keepNearest(calls, 5), puts: keepNearest(puts, 5), expiries: EXPIRIES }
 }
 
 export const EXPIRY_OPTIONS = EXPIRIES
@@ -445,16 +470,17 @@ export function payoffCurve(
   quantity: number,
   side: 'buy' | 'sell'
 ): { prob: number; pnl: number }[] {
+  const N = CONTRACT_NOTIONAL
   const comm = COMMISSION_PER_CONTRACT
-  const totalCostPerContract = premium + comm  // what you pay per contract (buy side)
+  const totalCostPerContract = premium + comm  // premium already in $ (scaled by N)
   const points: { prob: number; pnl: number }[] = []
   for (let i = 0; i <= 200; i++) {
     const p = i / 200
     let intrinsic: number
     if (optionType === 'call') {
-      intrinsic = Math.max(0, p - strike)
+      intrinsic = Math.max(0, p - strike) * N
     } else {
-      intrinsic = Math.max(0, strike - p)
+      intrinsic = Math.max(0, strike - p) * N
     }
     // Buy: profit = intrinsic - (premium + commission)
     // Sell: profit = (premium - commission) - intrinsic  [seller pays commission too]

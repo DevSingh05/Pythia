@@ -35,11 +35,19 @@ const ANON_LABEL = /^(Person|Team|Player|Contestant)\s+[A-Z]{1,4}$/
 function shortLabel(question: string, groupItemTitle?: string): string {
   // Use groupItemTitle only if it's a real name, not an anonymised placeholder
   if (groupItemTitle && !ANON_LABEL.test(groupItemTitle)) return groupItemTitle
-  // Parse the real name from the question text
+  // Parse the real name from the question text — verify it isn't also anonymised
   const colonIdx = question.lastIndexOf(': ')
-  if (colonIdx !== -1) return question.slice(colonIdx + 2).slice(0, 20)
+  if (colonIdx !== -1) {
+    const candidate = question.slice(colonIdx + 2).slice(0, 20)
+    if (!ANON_LABEL.test(candidate)) return candidate
+  }
   const willMatch = question.match(/^Will (.+?) (?:win|be|get|receive|become|make|reach|finish)/i)
-  if (willMatch) return willMatch[1].slice(0, 20)
+  if (willMatch) {
+    const candidate = willMatch[1].slice(0, 20)
+    if (!ANON_LABEL.test(candidate)) return candidate
+  }
+  // If groupItemTitle was anonymised, display it as-is (Polymarket intentionally hides the name)
+  if (groupItemTitle) return groupItemTitle
   return question.length > 20 ? question.slice(0, 20) + '…' : question
 }
 

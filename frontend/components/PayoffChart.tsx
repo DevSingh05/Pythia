@@ -4,9 +4,9 @@ import {
   ComposedChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid, ReferenceDot
 } from 'recharts'
-import { payoffCurve, COMMISSION_PER_CONTRACT } from '@/lib/pricing'
+import { payoffCurve, COMMISSION_PER_CONTRACT, CONTRACT_NOTIONAL } from '@/lib/pricing'
 import { OptionQuote } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, fmtPremium } from '@/lib/utils'
 
 interface PayoffChartProps {
   option: OptionQuote
@@ -27,17 +27,10 @@ function CustomTooltip({ active, payload }: any) {
         'font-mono font-bold text-sm mt-1',
         positive ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'
       )}>
-        {positive ? '+' : ''}{fmtCents(pnl)}
+        {positive ? '+' : ''}{fmtPremium(pnl)}
       </div>
     </div>
   )
-}
-
-function fmtCents(v: number) {
-  const abs = Math.abs(v)
-  const sign = v >= 0 ? '+' : '-'
-  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`
-  return `${sign}${(abs * 100).toFixed(1)}¢`
 }
 
 export default function PayoffChart({ option, side, quantity, currentProb, className }: PayoffChartProps) {
@@ -47,20 +40,21 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
   const maxPnl = Math.max(...pnlValues)
   const minPnl = Math.min(...pnlValues)
 
-  // Breakeven computed analytically — searching the curve fails because
-  // PnL is constant at -premium for all p below K (call) or above K (put),
-  // causing the search to return p=0 instead of the true zero crossing.
+  // Breakeven: convert dollar-valued premium back to probability space
+  // by dividing by CONTRACT_NOTIONAL (100).
+  const N = CONTRACT_NOTIONAL
   const comm = COMMISSION_PER_CONTRACT
-  const totalCost = option.premium + comm
+  const premProb = option.premium / N  // premium in probability units
+  const commProb = comm / N            // commission in probability units
   let breakevenProb: number
   if (side === 'buy') {
     breakevenProb = option.type === 'call'
-      ? Math.min(0.999, option.strike + totalCost)   // call: K + premium + comm
-      : Math.max(0.001, option.strike - totalCost)    // put:  K - premium - comm
+      ? Math.min(0.999, option.strike + premProb + commProb)
+      : Math.max(0.001, option.strike - premProb - commProb)
   } else {
     breakevenProb = option.type === 'call'
-      ? Math.min(0.999, option.strike + (option.premium - comm))
-      : Math.max(0.001, option.strike - (option.premium - comm))
+      ? Math.min(0.999, option.strike + premProb - commProb)
+      : Math.max(0.001, option.strike - premProb + commProb)
   }
 
   const dataWithZones = data.map(d => ({
@@ -69,11 +63,8 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
     loss: d.pnl < 0 ? d.pnl : 0,
   }))
 
-  const yPad = (maxPnl - minPnl) * 0.15 || 0.01
+  const yPad = (maxPnl - minPnl) * 0.15 || 1
   const yDomain = [minPnl - yPad, maxPnl + yPad]
-
-  // Probability options are bounded [0,1] — max profit is always finite
-  // (unlike equity options where stock can go to infinity)
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -82,7 +73,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
         <div className="rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 p-3 text-center">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
           <div className="text-base font-mono font-bold text-emerald-400">
-            {fmtCents(maxPnl)}
+            +{fmtPremium(maxPnl)}
           </div>
         </div>
         <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3 text-center">
@@ -94,7 +85,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
         <div className="rounded-xl bg-red-500/[0.06] border border-red-500/20 p-3 text-center">
           <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Loss</div>
           <div className="text-base font-mono font-bold text-red-400">
-            {fmtCents(minPnl)}
+            -{fmtPremium(Math.abs(minPnl))}
           </div>
         </div>
       </div>
@@ -113,7 +104,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
 
         <div className="h-44">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={dataWithZones} margin={{ top: 28, right: 12, left: -16, bottom: 4 }}>
+            <ComposedChart data={dataWithZones} margin={{ top: 28, right: 12, left: -8, bottom: 4 }}>
               <defs>
                 <linearGradient id="payoffGainGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
@@ -139,7 +130,7 @@ export default function PayoffChart({ option, side, quantity, currentProb, class
               />
               <YAxis
                 domain={yDomain}
-                tickFormatter={v => `${(v * 100).toFixed(0)}¢`}
+                tickFormatter={v => `$${v.toFixed(0)}`}
                 tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'var(--font-mono)' }}
                 axisLine={false}
                 tickLine={false}

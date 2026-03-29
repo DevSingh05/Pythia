@@ -29,9 +29,9 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       symbol: 'Δ',
       name: 'Delta',
       value: option.delta,
-      unit: 'per 1pp',
-      tip: 'Change in option value per 1 percentage-point move in YES probability. Ranges 0→0.5 for calls near ATM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.5),
+      unit: '$/1pp',
+      tip: 'Dollar change in contract value per 1 percentage-point move in YES probability. ATM calls ≈ $50.',
+      normalise: v => Math.min(1, Math.abs(v) / 50),
       positive: option.type === 'call' ? true : undefined,
     },
     {
@@ -40,33 +40,34 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       value: option.gamma,
       unit: 'Δ/pp',
       tip: 'Change in delta per 1 percentage-point move in probability. Peaks at-the-money, tapers to near zero deep ITM/OTM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.12),
+      normalise: v => Math.min(1, Math.abs(v) / 12),
       positive: true,
     },
     {
       symbol: 'Θ',
       name: 'Theta',
       value: option.theta,
-      unit: 'dV/dτ',
-      tip: 'Rate of time decay — how fast the option loses value as expiry approaches. Always negative for long options. Peaks ATM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.15),
+      unit: '$/day',
+      tip: 'Daily time decay — how much value the contract loses per day as expiry approaches. Always negative for long options.',
+      normalise: v => Math.min(1, Math.abs(v) / 15),
       positive: false,
     },
     {
       symbol: 'ν',
       name: 'Vega',
       value: option.vega,
-      unit: 'dV/dσ',
-      tip: 'Sensitivity to changes in implied volatility. Peaks ATM, tapers off for deep ITM/OTM options.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.03),
+      unit: '$/vol',
+      tip: 'Dollar sensitivity to a 1-unit change in implied volatility. Peaks ATM, tapers off deep ITM/OTM.',
+      normalise: v => Math.min(1, Math.abs(v) / 3),
     },
   ]
 
   const fmtVal = (g: GreekDef) => {
     const abs = Math.abs(g.value)
-    if (abs === 0) return '0.0000'
-    if (abs < 0.0001) return g.value.toExponential(2)
-    return g.value.toFixed(4)
+    if (abs === 0) return '0.00'
+    if (abs < 0.01) return g.value.toFixed(4)
+    if (abs < 1) return g.value.toFixed(3)
+    return g.value.toFixed(2)
   }
 
   return (

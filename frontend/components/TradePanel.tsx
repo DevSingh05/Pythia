@@ -80,7 +80,7 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
         side,
         quantity,
         premium: option.premium,
-        totalCost: option.premium * quantity,
+        totalCost: option.premium * quantity + COMMISSION_PER_CONTRACT * quantity,
         impliedVol: option.impliedVol,
         status: 'filled',
       })

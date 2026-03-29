@@ -57,9 +57,9 @@ export default function OptionRow({
 
   // Delta color by magnitude
   const absDelta = Math.abs(option.delta)
-  const deltaColor = absDelta > 0.4
+  const deltaColor = absDelta > 40
     ? 'text-emerald-400'
-    : absDelta > 0.2
+    : absDelta > 20
       ? 'text-zinc-300'
       : 'text-zinc-500'
 
@@ -106,10 +106,10 @@ export default function OptionRow({
       {/* Greeks */}
       {showGreeks && (
         <div className="flex items-center justify-center gap-2">
-          <GreekCell label="Delta" value={fmtG(option.delta, 3)} color={deltaColor} />
-          <GreekCell label="Gamma" value={fmtG(option.gamma, 4)} color="text-blue-400" />
-          <GreekCell label="Theta" value={fmtG(option.theta, 4)} color="text-red-400/80" />
-          <GreekCell label="Vega" value={fmtG(option.vega, 4)} color="text-violet-400" />
+          <GreekCell label="Delta" value={fmtG(option.delta, 2)} color={deltaColor} />
+          <GreekCell label="Gamma" value={fmtG(option.gamma, 2)} color="text-blue-400" />
+          <GreekCell label="Theta" value={fmtG(option.theta, 2)} color="text-red-400/80" />
+          <GreekCell label="Vega" value={fmtG(option.vega, 2)} color="text-violet-400" />
         </div>
       )}
 

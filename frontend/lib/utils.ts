@@ -10,9 +10,12 @@ export function fmtProb(p: number, decimals = 0): string {
 }
 
 export function fmtPremium(p: number): string {
-  if (p < 0.00005) return '<0.01¢'
-  if (p < 0.01) return `${(p * 100).toFixed(2)}¢`
-  return `$${p.toFixed(3)}`
+  const abs = Math.abs(p)
+  if (abs < 0.00005) return '$0.00'
+  // Show enough decimals so the value is never rounded to zero
+  if (abs < 0.01) return `$${p.toFixed(4)}`
+  if (abs < 1) return `$${p.toFixed(3)}`
+  return `$${p.toFixed(2)}`
 }
 
 export function fmtUSDC(n: number): string {
