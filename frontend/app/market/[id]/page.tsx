@@ -65,7 +65,7 @@ export default function MarketPage() {
   const [selectedOption, setSelectedOption] = useState<OptionQuote | null>(null)
   const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy')
   // Match API / pricer labels (3D, 7D, 14D, 30D) so ?expiry= filters chain rows
-  const [selectedExpiry, setSelectedExpiry] = useState('7D')
+  const [selectedExpiry, setSelectedExpiry] = useState('30D')
   const demo = useDemoMode()
 
   useEffect(() => {

@@ -369,27 +369,37 @@ const STRIKE_GRID = [
  */
 export function availableStrikes(
   currentProb: number,
-  sigma: number,
-  tauDays: number,
-  nStd = 2.5,
-  minStrikes = 7,
+  _sigma: number,
+  _tauDays: number,
+  _nStd = 2.5,
+  _minStrikes = 7,
 ): number[] {
-  const tau = Math.max(0, tauDays) / 365
-  const L0 = logit(currentProb)
-  const sigTau = clampSigma(sigma) * Math.sqrt(tau)
-  const halfWidth = Math.max(nStd * sigTau, 0.8)
-  const Llo = L0 - halfWidth
-  const Lhi = L0 + halfWidth
+  const L0 = logit(safeProb(currentProb))
 
-  const filtered = STRIKE_GRID.filter(K => {
-    const LK = logit(K)
-    return LK >= Llo && LK <= Lhi
-  })
+  // Sort every grid strike by logit-space distance from current prob
+  const byDistance = [...STRIKE_GRID].sort(
+    (a, b) => Math.abs(logit(a) - L0) - Math.abs(logit(b) - L0)
+  )
 
-  if (filtered.length >= minStrikes) return filtered
+  // ATM = closest strike
+  const atm = byDistance[0]
+  const atmL = logit(atm)
 
-  const sorted = [...STRIKE_GRID].sort((a, b) => Math.abs(logit(a) - L0) - Math.abs(logit(b) - L0))
-  return [...new Set([...filtered, ...sorted.slice(0, minStrikes)])].sort((a, b) => a - b)
+  // 3 closest strikes strictly above ATM in logit space (ascending logit = ascending prob)
+  const above = STRIKE_GRID
+    .filter(K => logit(K) > atmL)
+    .sort((a, b) => logit(a) - logit(b))   // ascending
+    .slice(0, 3)
+
+  // 3 closest strikes strictly below ATM in logit space
+  const below = STRIKE_GRID
+    .filter(K => logit(K) < atmL)
+    .sort((a, b) => logit(b) - logit(a))   // descending (closest first)
+    .slice(0, 3)
+    .sort((a, b) => a - b)                 // re-sort ascending for merge
+
+  // Return all 7 (or fewer at extremes) ascending — chain route will reverse for display
+  return [...below, atm, ...above].sort((a, b) => a - b)
 }
 
 export function buildOptionsChain(

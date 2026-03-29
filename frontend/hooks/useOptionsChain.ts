@@ -66,7 +66,7 @@ export function useOptionsChain(
       })
 
       try {
-        const data = await fetchOptionsChain(marketId, expiry)
+        const data = await fetchOptionsChain(marketId, expiry, currentProb)
         if (!cancelled) setState({ data: sanitise(data), loading: false, error: null })
       } catch {
         // Chain endpoint unavailable — build locally from the supplied implied vol
