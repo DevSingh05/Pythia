@@ -331,18 +331,14 @@ export interface OptionsChainResponse {
 /** Fetch options chain from Pythia pricing engine. */
 export async function fetchOptionsChain(
   marketId: string,
-  expiry?: string
+  expiry?: string,
 ): Promise<OptionsChainResponse> {
-  const qs = expiry ? `?expiry=${expiry}` : ''
-  return apiFetch<OptionsChainResponse>(`${MARKETS_BASE}/markets/${marketId}/chain${qs}`)
-}
-
-/** Fetch current vol estimate for a market. */
-export async function fetchVolatility(marketId: string): Promise<{ sigma: number; daysEstimated: number }> {
-  if (API_BASE) {
-    return apiFetch(`${API_BASE}/markets/${marketId}/vol`)
-  }
-  return apiFetch(`${MARKETS_BASE}/markets/${marketId}/vol`)
+  const qs = new URLSearchParams()
+  if (expiry) qs.set('expiry', expiry)
+  const q = qs.toString()
+  return apiFetch<OptionsChainResponse>(
+    `${MARKETS_BASE}/markets/${marketId}/chain${q ? '?' + q : ''}`
+  )
 }
 
 // ─── Order placement (Pythia backend) ─────────────────────────────────────────
@@ -395,4 +391,62 @@ export interface Position {
 
 export async function fetchPortfolio(walletAddress: string): Promise<Position[]> {
   return apiFetch<Position[]>(`${API_BASE}/portfolio/${walletAddress}`)
+}
+
+// ─── American option pricing ──────────────────────────────────────────────────
+
+export interface AmericanPriceResult {
+  price: number
+  delta: number
+  theta: number
+  vega: number
+  gamma: number
+  source: 'american' | 'european_fallback'
+}
+
+/**
+ * Price a single contract via the /api/price route.
+ * Returns American pricing when the Python service is up, European vanilla otherwise.
+ */
+export async function fetchAmericanPrice(params: {
+  p0: number
+  strike: number
+  type: 'call' | 'put'
+  tau_days: number
+  sigma: number
+}): Promise<AmericanPriceResult> {
+  return apiFetch<AmericanPriceResult>('/api/price', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+// ─── Backend order sync ───────────────────────────────────────────────────────
+
+/**
+ * Fetch all paper orders for the current user from the backend.
+ * Returns an empty array if the user is not authenticated or the request fails.
+ */
+export async function fetchOrders(accessToken: string): Promise<any[]> {
+  try {
+    return await apiFetch<any[]>('/api/orders', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Delete all paper orders for the current user from the backend (used on portfolio reset).
+ */
+export async function deleteAllOrders(accessToken: string): Promise<void> {
+  try {
+    await apiFetch<void>('/api/orders', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  } catch {
+    // Best-effort — not critical if this fails
+  }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn, fmtProb } from '@/lib/utils'
 import { OptionsChainResponse, OptionQuote } from '@/lib/api'
 import OptionRow, { OptionChainHeader } from './OptionRow'
@@ -28,6 +28,20 @@ export default function OptionsChain({
   const [side, setSide] = useState<Side>('buy')
   const [type, setType] = useState<ContractType>('call')
   const [expiry, setExpiry] = useState(chain.expiries?.[1] ?? chain.expiries?.[0] ?? '1W')
+  const [dataAgeMs, setDataAgeMs] = useState(0)
+
+  // Track how stale the price data is — refreshes every second
+  useEffect(() => {
+    const updatedAt = chain.updatedAt ? new Date(chain.updatedAt).getTime() : Date.now()
+    const tick = () => setDataAgeMs(Date.now() - updatedAt)
+    tick()
+    const id = setInterval(tick, 1_000)
+    return () => clearInterval(id)
+  }, [chain.updatedAt])
+
+  const dataAgeS = Math.floor(dataAgeMs / 1000)
+  const isStale = dataAgeS > 10
+  const isVeryStale = dataAgeS > 30
 
   function handleExpiryChange(e: string) {
     setExpiry(e)
@@ -115,12 +129,25 @@ export default function OptionsChain({
       </div>
 
       {/* IV / HV info bar */}
-      <div className="px-3 py-1.5 bg-surface/50 flex items-center justify-between text-xs text-muted border-b border-border/50">
+      <div className="px-3 py-1.5 bg-surface/50 flex items-center justify-between text-xs text-muted border-b border-border/50 flex-wrap gap-y-1">
         <span>IV <span className="text-zinc-300 font-mono tabular-nums">{(chain.impliedVol * 100).toFixed(1)}%</span></span>
         <span className="text-muted/70">
           {type === 'call' ? 'Calls profit above strike' : 'Puts profit below strike'}
         </span>
-        <span>HV <span className="text-muted-fg font-mono tabular-nums">{(chain.historicalVol * 100).toFixed(1)}%</span></span>
+        <div className="flex items-center gap-2">
+          <span>HV <span className="text-muted-fg font-mono tabular-nums">{(chain.historicalVol * 100).toFixed(1)}%</span></span>
+          {/* Data freshness indicator — warns traders of potential latency arbitrage */}
+          <span className={cn(
+            'font-mono tabular-nums px-1.5 py-0.5 rounded text-[10px]',
+            isVeryStale
+              ? 'bg-red/15 text-red border border-red/30'
+              : isStale
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                : 'bg-green/10 text-green border border-green/20'
+          )}>
+            {isVeryStale ? '⚠ Stale' : isStale ? `${dataAgeS}s old` : 'Live'}
+          </span>
+        </div>
       </div>
 
       <OptionChainHeader showGreeks={showGreeks} />

@@ -11,7 +11,7 @@ import ScenarioAnalysis from '@/components/ScenarioAnalysis'
 import PnlBreakdown from '@/components/PnlBreakdown'
 import EVCalculator from '@/components/EVCalculator'
 import { usePaperTrades } from '@/hooks/usePaperTrades'
-import { fetchMarket, fetchVolatility, Position } from '@/lib/api'
+import { fetchMarket, fetchVolatility, fetchAmericanPrice, Position } from '@/lib/api'
 import { generateOrderId, MarketSnapshot, PaperOrder } from '@/lib/paperTrade'
 import { cn } from '@/lib/utils'
 import { ArrowLeft, RotateCcw, Wallet, Briefcase } from 'lucide-react'
@@ -38,14 +38,43 @@ export default function PortfolioPage() {
         ])
 
         const currentProb = market.status === 'fulfilled' ? market.value.currentProb : undefined
-        const impliedVol = vol.status === 'fulfilled' ? (vol.value as any).sigma : undefined
+        const impliedVol  = vol.status === 'fulfilled' ? (vol.value as any).sigma : undefined
 
-        if (currentProb !== undefined) {
-          prices.set(id, {
-            currentProb,
-            impliedVol: impliedVol ?? 1.5,
-          })
+        if (currentProb === undefined) return
+
+        const p0    = currentProb
+        const sigma = impliedVol ?? 1.5
+
+        // Fetch American prices for every unique (strike, type, remaining-tau)
+        // that belongs to an open position in this market.
+        const positionKeys = new Set<string>()
+        for (const o of orders) {
+          if (o.marketId !== id) continue
+          const daysSinceFill = (Date.now() - o.timestamp) / 86_400_000
+          const remainingDays = Math.max(1, Math.round(o.daysToExpiry - daysSinceFill))
+          positionKeys.add(`${o.strike}|${o.type}|${remainingDays}`)
         }
+
+        const americanPrices = new Map<string, number>()
+        await Promise.allSettled(
+          [...positionKeys].map(async (key) => {
+            const [strikeStr, type, tauStr] = key.split('|')
+            try {
+              const result = await fetchAmericanPrice({
+                p0,
+                strike: parseFloat(strikeStr),
+                type: type as 'call' | 'put',
+                tau_days: parseInt(tauStr, 10),
+                sigma,
+              })
+              americanPrices.set(key, result.price)
+            } catch {
+              // Pricing service unavailable — derivePositions falls back to vanilla
+            }
+          })
+        )
+
+        prices.set(id, { currentProb: p0, impliedVol: sigma, americanPrices })
       })
     )
 
