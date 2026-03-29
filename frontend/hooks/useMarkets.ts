@@ -73,7 +73,10 @@ export function usePriceHistory(
   })
 
   useEffect(() => {
-    if (!tokenId) return
+    if (!tokenId) {
+      setState(s => ({ ...s, loading: false }))
+      return
+    }
     setState(s => ({ ...s, loading: true, error: null }))
     fetchPriceHistory(tokenId, interval, marketId)
       .then(history => setState({ history, loading: false, error: null }))

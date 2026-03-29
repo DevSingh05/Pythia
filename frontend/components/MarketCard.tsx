@@ -14,7 +14,7 @@ export default function MarketCard({ market }: MarketCardProps) {
   const isUp = market.change24h >= 0
 
   return (
-    <Link href={`/market/${market.id}`}>
+    <Link href={`/market/${market.id}?ps=${encodeURIComponent(market.slug)}`}>
       <div className={cn(
         'group flex flex-col gap-3 p-4 rounded-lg',
         'bg-card hover:bg-card-hover border border-border hover:border-zinc-600',

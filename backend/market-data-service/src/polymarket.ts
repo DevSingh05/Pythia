@@ -301,8 +301,12 @@ export async function resolveYesTokenId(
 ): Promise<string | null> {
   const market = await fetchMarket(condition_id);
   if (!market) return null;
-  return (
-    market.tokens.find((t) => t.outcome.toLowerCase() === "yes")?.token_id ??
-    null
-  );
+  // Fallback to clobTokenIds if tokens array doesn't exist
+  if (market.tokens && market.tokens.length > 0) {
+    return (
+      market.tokens.find((t) => t.outcome.toLowerCase() === "yes")?.token_id ??
+      null
+    );
+  }
+  return market.clobTokenIds?.[0] ?? null;
 }

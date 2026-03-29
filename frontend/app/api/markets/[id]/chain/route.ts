@@ -12,7 +12,9 @@ export async function GET(
   try {
     // 1. Get current probability and vol from market-data-service
     const mdsRes = await fetch(`${MDS}/markets/${id}`, { next: { revalidate: 5 } })
-    if (!mdsRes.ok) return NextResponse.json({ error: 'Market not found' }, { status: 404 })
+    if (!mdsRes.ok) {
+      return NextResponse.json({ error: `Backend returned ${mdsRes.status} ${mdsRes.statusText} for id ${id}` }, { status: 404 })
+    }
     const market = await mdsRes.json()
 
     const volRes = await fetch(`${MDS}/markets/${id}/vol`, { next: { revalidate: 60 } })

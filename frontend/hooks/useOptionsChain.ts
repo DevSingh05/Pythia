@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchOptionsChain, OptionsChainResponse } from '@/lib/api'
 import { buildOptionsChain, EXPIRY_OPTIONS } from '@/lib/pricing'
 
@@ -32,40 +32,30 @@ export function useOptionsChain(
     if (!marketId) return
     setState(s => ({ ...s, loading: true, error: null }))
 
-    if (apiUrl) {
-      // Use real backend
-      fetchOptionsChain(marketId, expiry)
-        .then(data => setState({ data, loading: false, error: null }))
-        .catch(e => setState({ data: null, loading: false, error: e.message }))
-    } else {
-      // Compute locally using logit-normal model (for dev/demo without backend)
+    const computeLocal = () => {
       const expiryOpt = EXPIRY_OPTIONS.find(e => e.label === expiry) ?? EXPIRY_OPTIONS[1]
-      const sigma = impliedVol || 1.5  // fallback vol if not provided
+      const sigma = impliedVol || 1.5
       const strikes = [0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]
       const chain = buildOptionsChain(currentProb, sigma, expiryOpt, strikes)
-
-      const data: OptionsChainResponse = {
+      return {
         marketId,
         currentProb,
         impliedVol: sigma,
         historicalVol: sigma * 0.9,
         expiries: EXPIRY_OPTIONS.map(e => e.label),
-        calls: chain.calls.map(c => ({
-          ...c,
-          impliedVol: sigma,
-          type: 'call' as const,
-          expiry,
-        })),
-        puts: chain.puts.map(p => ({
-          ...p,
-          impliedVol: sigma,
-          type: 'put' as const,
-          expiry,
-        })),
+        calls: chain.calls.map(c => ({ ...c, impliedVol: sigma, type: 'call' as const, expiry })),
+        puts: chain.puts.map(p => ({ ...p, impliedVol: sigma, type: 'put' as const, expiry })),
         updatedAt: new Date().toISOString(),
-      }
+      } as OptionsChainResponse
+    }
 
-      setState({ data, loading: false, error: null })
+    if (apiUrl) {
+      // Try real backend; silently fall back to client-side if it fails
+      fetchOptionsChain(marketId, expiry)
+        .then(data => setState({ data, loading: false, error: null }))
+        .catch(() => setState({ data: computeLocal(), loading: false, error: null }))
+    } else {
+      setState({ data: computeLocal(), loading: false, error: null })
     }
   }, [marketId, currentProb, impliedVol, expiry, apiUrl])
 

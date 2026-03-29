@@ -21,7 +21,12 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
     ...options,
   })
   if (!res.ok) {
-    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText}`)
+    let msg = `API error ${res.status}: ${res.statusText}`
+    try {
+      const data = await res.json()
+      if (data.error) msg = `API error ${res.status}: ${data.error}`
+    } catch {}
+    throw new ApiError(res.status, msg)
   }
   return res.json()
 }
@@ -34,18 +39,21 @@ export interface PolymarketMarket {
   slug?: string
   question: string
   description: string
-  endDateIso: string          // "2026-03-31" — camelCase from Gamma API
+  endDateIso: string          // "YYYY-MM-DD" — camelCase from Gamma API
   endDate?: string            // full ISO fallback
-  volume: number
-  volume24hr: number
-  liquidity: number
-  outcomes: string[]
+  volume: number | string
+  volume24hr: number | string
+  liquidity: number | string  // string at market level inside events response
+  liquidityNum?: number
+  outcomes: string[] | string
   outcomePrices: string | string[]
-  clobTokenIds?: string[]     // [yesTokenId, noTokenId]
-  tags: { id: string; label: string }[]
+  clobTokenIds?: string[] | string  // always JSON string in events endpoint
+  tags?: { id: string; label: string }[]
   active: boolean
   closed: boolean
-  oneDayPriceChange?: number  // 24h probability change (-1 to 1)
+  oneDayPriceChange?: number
+  negRisk?: boolean
+  groupItemTitle?: string     // outcome label for negRisk markets (e.g. "Spain", "Haiti")
   events?: { id: string; slug: string; title?: string }[]
 }
 
@@ -73,9 +81,12 @@ export interface PricePoint {
 }
 
 function toAppMarket(m: PolymarketMarket): AppMarket {
-  const prices = (typeof m.outcomePrices === 'string'
-    ? JSON.parse(m.outcomePrices)
-    : m.outcomePrices) as string[]
+  let prices: string[] = []
+  try {
+    prices = (typeof m.outcomePrices === 'string'
+      ? JSON.parse(m.outcomePrices)
+      : m.outcomePrices) ?? []
+  } catch { /* malformed JSON — leave prices empty */ }
   const yesProb = parseFloat(prices[0]) || 0
 
   // endDateIso is "YYYY-MM-DD"; fall back to endDate (full ISO)
@@ -86,16 +97,26 @@ function toAppMarket(m: PolymarketMarket): AppMarket {
     : 0
 
   // clobTokenIds[0] = YES token, required by Gamma /prices-history
-  const clobTokenId = m.clobTokenIds?.[0] ?? ''
+  // Always a JSON string in the events endpoint response
+  let rawTokenIds: string[] | undefined
+  try {
+    rawTokenIds = typeof m.clobTokenIds === 'string'
+      ? JSON.parse(m.clobTokenIds as unknown as string)
+      : m.clobTokenIds
+  } catch { /* leave undefined */ }
+  const clobTokenId = rawTokenIds?.[0] ?? ''
 
-  // Use the parent event slug for the Polymarket URL — it matches polymarket.com/event/{slug}.
-  // Market-level slugs sometimes include a numeric suffix that doesn't map to a real page.
-  const eventSlug = m.events?.[0]?.slug ?? m.slug ?? m.conditionId
+  // Polymarket URLs use the EVENT slug: polymarket.com/event/{event-slug}
+  // For negRisk outcomes (e.g. "Will Haiti win the World Cup?"), the parent
+  // event slug (e.g. "2026-fifa-world-cup-winner-595") is the correct link.
+  // For standalone binary markets the event slug == market slug.
+  const parentEventSlug = m.events?.[0]?.slug
+  const polySlug = parentEventSlug ?? m.slug ?? m.conditionId
 
   return {
     id: m.id,
     conditionId: m.conditionId,
-    slug: eventSlug,
+    slug: polySlug,
     clobTokenId,
     title: m.question,
     description: m.description,
@@ -103,8 +124,8 @@ function toAppMarket(m: PolymarketMarket): AppMarket {
     daysToResolution: daysLeft,
     currentProb: yesProb,
     change24h: m.oneDayPriceChange ?? 0,
-    volume24h: m.volume24hr ?? 0,
-    liquidity: m.liquidity ?? 0,
+    volume24h: parseFloat(m.volume24hr as any) || 0,
+    liquidity: parseFloat((m.liquidityNum ?? m.liquidity) as any) || 0,
     tags: m.tags?.map(t => t.label) ?? [],
     active: m.active,
     closed: m.closed,
@@ -125,8 +146,16 @@ export async function fetchMarkets(params?: {
     if (params?.offset) qs.set('offset', String(params.offset))
     if (params?.tag) qs.set('tag', params.tag)
     if (params?.q) qs.set('q', params.q)
-    const res = await apiFetch<{ markets: any[] }>(`${API_BASE}/markets?${qs}`)
-    return res.markets.map(m => ({
+    const res = await apiFetch<any>(`${API_BASE}/markets?${qs}`)
+    const arr = Array.isArray(res) ? res : (res?.markets || [])
+    
+    // If the response came directly from Gamma (user configured backend to Gamma), use toAppMarket.
+    // Gamma uses `conditionId` (camelCase) while the Pythia backend uses `condition_id` (snake_case).
+    if (arr.length > 0 && arr[0].conditionId && !arr[0].condition_id) {
+      return arr.flatMap((m: any) => { try { return [toAppMarket(m)] } catch { return [] } })
+    }
+
+    return arr.map((m: any) => ({
       id: m.condition_id,
       conditionId: m.condition_id,
       slug: m.slug ?? m.condition_id,
@@ -147,21 +176,31 @@ export async function fetchMarkets(params?: {
 
   // Proxy fallback — browser can't hit Gamma directly (CORS)
   const qs = new URLSearchParams({
-    active: 'true',
-    closed: 'false',
     limit: String(params?.limit ?? 20),
     offset: String(params?.offset ?? 0),
   })
   if (params?.tag) qs.set('tag', params.tag)
   if (params?.q) qs.set('q', params.q)
-  const raw = await apiFetch<PolymarketMarket[]>(`${MARKETS_BASE}/markets?${qs}`)
-  return raw.map(toAppMarket)
+  const res = await apiFetch<unknown>(`${MARKETS_BASE}/markets?${qs}`)
+  // Gamma returns a plain array; backend wraps in { markets: [...] }
+  const arr: PolymarketMarket[] = Array.isArray(res)
+    ? res
+    : Array.isArray((res as any)?.markets)
+      ? (res as any).markets
+      : []
+  return arr.flatMap(m => { try { return [toAppMarket(m)] } catch { return [] } })
 }
 
 /** Fetch single market. */
 export async function fetchMarket(id: string): Promise<AppMarket> {
   if (API_BASE) {
     const m = await apiFetch<any>(`${API_BASE}/markets/${id}`)
+    // When API_BASE points to our own Next.js proxy (/api), the response is
+    // Gamma format (camelCase conditionId). When it points to the real Pythia
+    // backend, it's snake_case (condition_id). Detect and route accordingly.
+    if (m.conditionId && !m.condition_id) {
+      return toAppMarket(m as PolymarketMarket)
+    }
     return {
       id: m.condition_id,
       conditionId: m.condition_id,
@@ -184,15 +223,6 @@ export async function fetchMarket(id: string): Promise<AppMarket> {
   return toAppMarket(raw)
 }
 
-// Official Gamma API interval enum: 1h | 6h | 1d | 1w | 1m | all
-// Map our internal labels to what the API actually accepts
-const INTERVAL_MAP: Record<string, string> = {
-  '1h':  '1h',
-  '6h':  '6h',
-  '1d':  '1d',
-  '7d':  '1w',   // "7d" is not valid — official value is "1w"
-  '30d': '1m',   // "30d" is not valid — official value is "1m"
-}
 
 /** Fetch probability history for a market (CLOB time-series).
  *  @param tokenId  The YES CLOB token_id (market.clobTokenId) required by Gamma /prices-history.
@@ -201,19 +231,17 @@ const INTERVAL_MAP: Record<string, string> = {
  */
 export async function fetchPriceHistory(
   tokenId: string,
-  interval: '1h' | '6h' | '1d' | '7d' | '30d' = '7d',
-  marketId?: string,
+  _interval?: string,   // ignored — we always fetch max so client-side filters work
+  _marketId?: string,
 ): Promise<PricePoint[]> {
-  if (API_BASE && marketId) {
-    const res = await apiFetch<{ history: PricePoint[] }>(`${API_BASE}/markets/${marketId}/history?interval=${interval}`)
-    return res.history ?? []
-  }
   if (!tokenId) return []
-  const gammaInterval = INTERVAL_MAP[interval] ?? '1w'
+  // Fetch full history (interval=max) so ProbChart's 1D/1W/1M/ALL buttons
+  // all work correctly via client-side filtering of the complete dataset.
   const res = await apiFetch<{ history: { t: number; p: number }[] }>(
-    `${MARKETS_BASE}/prices-history?market=${tokenId}&interval=${gammaInterval}&fidelity=60`
+    `/api/prices-history?market=${tokenId}&interval=max&fidelity=60`
   )
-  return res.history ?? []
+  // CLOB returns t in Unix seconds; PricePoint.t must be milliseconds for JS Date
+  return (res.history ?? []).map(pt => ({ t: pt.t * 1000, p: pt.p }))
 }
 
 // ─── Options data (Pythia backend) ────────────────────────────────────────────

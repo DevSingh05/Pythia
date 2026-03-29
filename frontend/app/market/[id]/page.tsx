@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import ProbabilityGauge from '@/components/ProbabilityGauge'
 import ProbChart from '@/components/ProbChart'
@@ -21,18 +21,18 @@ type TradeSide = 'buy' | 'sell'
 export default function MarketPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const id = params.id as string
 
   const [mode, setMode] = useState<ViewMode>('simple')
   const [selectedOption, setSelectedOption] = useState<OptionQuote | null>(null)
   const [tradeSide, setTradeSide] = useState<TradeSide>('buy')
-  const [historyInterval, setHistoryInterval] = useState<'1h' | '6h' | '1d' | '7d' | '30d'>('7d')
-
   const { market, loading: mktLoading, error: mktError } = useMarket(id)
+
+  // ps = event slug passed from MarketCard; falls back to market.slug once loaded
+  const polySlug = searchParams.get('ps') ?? market?.slug ?? id
   const { history, loading: histLoading } = usePriceHistory(
     market?.clobTokenId ?? '',
-    historyInterval,
-    id,
   )
   const {
     data: chain,
@@ -114,7 +114,7 @@ export default function MarketPage() {
                     <span>Liquidity: {fmtUSDC(market.liquidity)}</span>
                   </div>
                   <a
-                    href={`https://polymarket.com/event/${market.slug}`}
+                    href={`https://polymarket.com/event/${polySlug}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-accent hover:underline"
