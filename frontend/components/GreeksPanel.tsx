@@ -46,19 +46,19 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
     {
       symbol: 'Θ',
       name: 'Theta',
-      value: option.theta,
-      unit: '$/day',
-      tip: 'Dollar decay per calendar day. Always negative for long options — you lose this much premium each day.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.003),
+      value: option.theta * 100,  // display in cents
+      unit: '¢/day',
+      tip: 'Premium decay per calendar day in cents. Always negative for long options — you lose this many cents of premium each day.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.3),
       positive: false,
     },
     {
       symbol: 'ν',
       name: 'Vega',
-      value: option.vega,
-      unit: 'per 1% σ',
-      tip: 'Dollar sensitivity to a 1 percentage-point move in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.008),
+      value: option.vega * 100,  // display in cents
+      unit: '¢/1%σ',
+      tip: 'Cent sensitivity to a 1 percentage-point move in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.8),
     },
   ]
 
