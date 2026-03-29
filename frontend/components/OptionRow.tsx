@@ -140,10 +140,25 @@ export function OptionChainHeader({ showGreeks }: { showGreeks?: boolean }) {
       <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Break­even</div>
       {showGreeks && (
         <div className="flex items-center justify-center gap-2">
-          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Delta</div>
-          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Gamma</div>
+          <div
+            className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center cursor-help"
+            title="∂V/∂p on [0,1]; multiply by 0.01 for $ per 1pp (see Greeks panel)"
+          >
+            Delta
+          </div>
+          <div
+            className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center cursor-help"
+            title="Δ(∂V/∂p) per +1pp in YES"
+          >
+            Gamma
+          </div>
           <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Theta</div>
-          <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center">Vega</div>
+          <div
+            className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider min-w-[56px] text-center cursor-help"
+            title="∂V/∂σ; ×0.01 for $ when σ moves 0.01 (e.g. 30%→31%)"
+          >
+            Vega
+          </div>
         </div>
       )}
       <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider text-right pr-8">Premium</div>

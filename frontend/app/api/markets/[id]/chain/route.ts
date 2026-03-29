@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { computeHistoricalVol } from '@/lib/pricing'
 
 const MDS = process.env.MARKET_DATA_SERVICE_URL || 'http://localhost:3001'
 const PRICER = process.env.PRICING_SERVICE_URL || 'http://localhost:8000'
 
+/** Map UI expiry label → calendar days (must match pricer EXPIRY_GRID). */
+function parseExpiryDays(label: string | null): number | null {
+  if (!label) return null
+  const u = label.trim().toUpperCase()
+  if (u === '1W') return 7
+  if (u === '2W') return 14
+  if (u === '1M') return 30
+  const m = u.match(/^(\d+)D$/)
+  if (m) return parseInt(m[1], 10)
+  return null
+}
+
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const expiryParam = req.nextUrl.searchParams.get('expiry')
+  const expiryDays = parseExpiryDays(expiryParam)
   
   try {
     // 1. Get current probability and vol from market-data-service
@@ -22,9 +37,21 @@ export async function GET(
       const volRes = await fetch(`${MDS}/markets/${id}/vol`, { next: { revalidate: 60 } })
       if (volRes.ok) {
         const volData = await volRes.json()
-        impliedVol = volData.sigma || 1.5
+        impliedVol = volData.sigma ?? 1.5
       }
     } catch { /* keep default */ }
+
+    // Historical vol from tick history (same pipeline as pricing.ts); fall back to pricing σ if sparse
+    let historicalVol = impliedVol
+    try {
+      const histRes = await fetch(`${MDS}/markets/${id}/history?days=30`, { next: { revalidate: 120 } })
+      if (histRes.ok) {
+        const histJson = await histRes.json()
+        const series = Array.isArray(histJson.history) ? histJson.history : []
+        const hv = computeHistoricalVol(series as { t: number; p: number }[])
+        if (Number.isFinite(hv)) historicalVol = hv
+      }
+    } catch { /* use impliedVol */ }
 
     // 2. Query Python Pricing Service
     const chainReq = {
@@ -47,10 +74,19 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid pricer response' }, { status: 502 })
     }
 
+    // Filter to requested maturity (API returns all τ from pricer; client sends ?expiry=7D)
+    let rows = chainData.chain as any[]
+    if (expiryDays != null) {
+      const filtered = rows.filter((c: any) => c.tau_days === expiryDays)
+      rows = filtered.length > 0 ? filtered : rows.filter((c: any) => c.tau_days === 7)
+    }
+
     // 3. Format to OptionsChainResponse
-    const expiries = Array.from(new Set(chainData.chain.map((c: any) => c.tau_days + 'D')))
-    
-    const calls = chainData.chain.map((c: any) => ({
+    const expiries: string[] = Array.from(
+      new Set((chainData.chain as any[]).map((c: any) => `${c.tau_days}D`)),
+    ).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+
+    const calls = rows.map((c: any) => ({
       strike: c.strike,
       type: 'call',
       expiry: c.tau_days + 'D',
@@ -69,7 +105,7 @@ export async function GET(
       impliedVol
     }))
 
-    const puts = chainData.chain.map((c: any) => ({
+    const puts = rows.map((c: any) => ({
       strike: c.strike,
       type: 'put',
       expiry: c.tau_days + 'D',
@@ -77,10 +113,10 @@ export async function GET(
       premium: c.put_price,
       premiumChange: 0,
       premiumChangePct: 0,
-      delta: c.put_delta !== undefined ? c.put_delta : -c.delta, // put delta approx
+      delta: c.put_delta !== undefined ? c.put_delta : -c.delta,
       gamma: c.gamma,
-      theta: c.theta,
-      vega: c.vega,
+      theta: c.put_theta !== undefined ? c.put_theta : c.theta,
+      vega: c.put_vega !== undefined ? c.put_vega : c.vega,
       breakeven: c.strike - c.put_price,
       breakevenDelta: 0,
       isITM: (market.current_prob ?? 0.5) < c.strike,
@@ -92,7 +128,7 @@ export async function GET(
        marketId: id,
        currentProb: market.current_prob ?? 0.5,
        impliedVol,
-       historicalVol: impliedVol * 0.9,
+       historicalVol,
        expiries,
        calls,
        puts,

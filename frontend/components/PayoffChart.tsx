@@ -1,10 +1,6 @@
 'use client'
 
-import {
-  ComposedChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, ReferenceLine, CartesianGrid, ReferenceDot
-} from 'recharts'
-import { payoffCurve } from '@/lib/pricing'
+import { payoffCurve, expiryBreakevenProb } from '@/lib/pricing'
 import { OptionQuote } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -16,185 +12,127 @@ interface PayoffChartProps {
   className?: string
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null
-  const { prob, pnl } = payload[0].payload
-  const positive = pnl > 0
-  return (
-    <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700 rounded-lg px-3 py-2 text-xs shadow-2xl">
-      <div className="text-zinc-500 font-mono">{(prob * 100).toFixed(0)}% YES at expiry</div>
-      <div className={cn(
-        'font-mono font-bold text-sm mt-1',
-        positive ? 'text-emerald-400' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'
-      )}>
-        {positive ? '+' : ''}{fmtCents(pnl)}
-      </div>
-    </div>
-  )
-}
-
-function fmtCents(v: number) {
+export function fmtCents(v: number) {
   const abs = Math.abs(v)
   const sign = v >= 0 ? '+' : '-'
   if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`
   return `${sign}${(abs * 100).toFixed(1)}¢`
 }
 
-export default function PayoffChart({ option, side, quantity, currentProb, className }: PayoffChartProps) {
+export function computePayoffMetrics(option: OptionQuote, side: 'buy' | 'sell', quantity: number) {
   const data = payoffCurve(option.type, option.strike, option.premium, quantity, side)
-
   const pnlValues = data.map(d => d.pnl)
   const maxPnl = Math.max(...pnlValues)
   const minPnl = Math.min(...pnlValues)
+  const beAnalytic = expiryBreakevenProb(option.type, option.strike, option.premium, side)
+  const beFallback = data.reduce((best, d) => Math.abs(d.pnl) < Math.abs(best.pnl) ? d : best).prob
+  const breakevenProb = beAnalytic ?? beFallback
+  const atYes = data[data.length - 1]?.pnl ?? 0
+  const atNo  = data[0]?.pnl ?? 0
+  return { maxPnl, minPnl, breakevenProb, beAnalytic, atYes, atNo }
+}
 
-  // Find breakeven (closest to zero crossing)
-  const bePoint = data.reduce((best, d) => Math.abs(d.pnl) < Math.abs(best.pnl) ? d : best)
-  const breakevenProb = bePoint.prob
+export default function PayoffChart({ option, side, quantity, currentProb, className }: PayoffChartProps) {
+  const { breakevenProb, beAnalytic, atYes, atNo } = computePayoffMetrics(option, side, quantity)
 
-  // Find PnL at current probability
-  const currentPoint = data.reduce((best, d) =>
-    Math.abs(d.prob - currentProb) < Math.abs(best.prob - currentProb) ? d : best
-  )
+  // What % of the bar is the loss zone (0 → breakeven)
+  const beWidth = Math.round((breakevenProb ?? 0.5) * 100)
 
-  const dataWithZones = data.map(d => ({
-    ...d,
-    gain: d.pnl > 0 ? d.pnl : 0,
-    loss: d.pnl < 0 ? d.pnl : 0,
-  }))
+  // Current prob marker position on the bar
+  const nowPct = Math.round(currentProb * 100)
 
-  const yPad = (maxPnl - minPnl) * 0.15 || 0.01
-  const yDomain = [minPnl - yPad, maxPnl + yPad]
-
-  const isUnlimited = side === 'sell' && (
-    (option.type === 'call' && maxPnl === option.premium * quantity) ||
-    (option.type === 'put' && maxPnl === option.premium * quantity)
-  )
+  // Is current prob already in profit zone?
+  const inProfit = currentProb >= (breakevenProb ?? 0.5)
 
   return (
-    <div className={cn('space-y-4', className)}>
-      {/* ── P&L Summary Cards ── */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 p-3 text-center">
-          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
-          <div className="text-base font-mono font-bold text-emerald-400">
-            {side === 'buy' && option.type === 'call' ? 'Unlimited' : fmtCents(maxPnl)}
+    <div className={cn('space-y-3', className)}>
+
+      {/* ── Split outcome cards ── */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Loss side — NO resolves */}
+        <div className="rounded-xl bg-red-500/[0.07] border border-red-500/25 p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-red-500/70" />
+            <span className="text-[10px] text-red-400/70 uppercase tracking-widest font-medium">If NO</span>
           </div>
+          <div className="text-2xl font-mono font-bold text-red-400 tabular-nums">
+            {fmtCents(atNo)}
+          </div>
+          <div className="text-[10px] text-zinc-600">market resolves NO (0%)</div>
         </div>
-        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/40 p-3 text-center">
-          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Breakeven</div>
-          <div className="text-base font-mono font-bold text-amber-400">
-            {(breakevenProb * 100).toFixed(1)}%
+
+        {/* Profit side — YES resolves */}
+        <div className="rounded-xl bg-emerald-500/[0.07] border border-emerald-500/25 p-4 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-500/70" />
+            <span className="text-[10px] text-emerald-400/70 uppercase tracking-widest font-medium">If YES</span>
           </div>
-        </div>
-        <div className="rounded-xl bg-red-500/[0.06] border border-red-500/20 p-3 text-center">
-          <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Loss</div>
-          <div className="text-base font-mono font-bold text-red-400">
-            {fmtCents(minPnl)}
+          <div className="text-2xl font-mono font-bold text-emerald-400 tabular-nums">
+            {fmtCents(atYes)}
           </div>
+          <div className="text-[10px] text-zinc-600">market resolves YES (100%)</div>
         </div>
       </div>
 
-      {/* ── Chart ── */}
-      <div className="relative rounded-xl bg-zinc-900/40 border border-zinc-800/60 p-2">
-        {/* Current price label */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800/90 border border-zinc-700/60 backdrop-blur-sm">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-            <span className="text-[10px] font-mono text-zinc-400">
-              YES now <span className="text-blue-400 font-semibold">{(currentProb * 100).toFixed(1)}%</span>
-            </span>
-          </div>
+      {/* ── Probability bar ── */}
+      <div className="space-y-2">
+        {/* Bar */}
+        <div className="relative h-5 rounded-full overflow-hidden flex">
+          {/* Loss zone */}
+          <div
+            className="h-full bg-red-500/30 border-r border-red-500/50 flex items-center justify-center"
+            style={{ width: `${beWidth}%` }}
+          />
+          {/* Profit zone */}
+          <div
+            className="h-full bg-emerald-500/30 flex items-center justify-center flex-1"
+          />
+
+          {/* Current prob marker */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-blue-400"
+            style={{ left: `${nowPct}%` }}
+          />
+
+          {/* Breakeven divider label */}
+          {beAnalytic != null && (
+            <div
+              className="absolute top-0 bottom-0 flex items-center"
+              style={{ left: `${beWidth}%`, transform: 'translateX(-50%)' }}
+            >
+              <div className="w-0.5 h-full bg-zinc-400/50" />
+            </div>
+          )}
         </div>
 
-        <div className="h-44">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={dataWithZones} margin={{ top: 28, right: 12, left: -16, bottom: 4 }}>
-              <defs>
-                <linearGradient id="payoffGainGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="payoffLossGrad" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
+        {/* Labels below bar */}
+        <div className="flex items-start justify-between text-[10px] font-mono text-zinc-500 px-0.5 relative">
+          <span className="text-red-400/70">0% → loss</span>
 
-              <CartesianGrid stroke="#1e1e24" strokeDasharray="3 3" vertical={false} />
+          {/* Breakeven label — centered */}
+          {beAnalytic != null && (
+            <span
+              className="absolute text-amber-400 font-semibold"
+              style={{ left: `${beWidth}%`, transform: 'translateX(-50%)' }}
+            >
+              BE {(breakevenProb * 100).toFixed(1)}%
+            </span>
+          )}
 
-              <XAxis
-                dataKey="prob"
-                type="number"
-                domain={[0, 1]}
-                tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-                tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'var(--font-mono)' }}
-                axisLine={false}
-                tickLine={false}
-                ticks={[0, 0.25, 0.5, 0.75, 1]}
-              />
-              <YAxis
-                domain={yDomain}
-                tickFormatter={v => `${(v * 100).toFixed(0)}¢`}
-                tick={{ fill: '#52525b', fontSize: 10, fontFamily: 'var(--font-mono)' }}
-                axisLine={false}
-                tickLine={false}
-                tickCount={5}
-              />
-              <Tooltip content={<CustomTooltip />} />
+          <span className="text-emerald-400/70">profit → 100%</span>
+        </div>
 
-              {/* Zero line */}
-              <ReferenceLine y={0} stroke="#3f3f46" strokeWidth={1.5} />
-
-              {/* Current probability line */}
-              <ReferenceLine
-                x={currentProb}
-                stroke="#3b82f6"
-                strokeDasharray="6 4"
-                strokeWidth={1.5}
-                strokeOpacity={0.6}
-              />
-
-              {/* Strike line */}
-              <ReferenceLine
-                x={option.strike}
-                stroke="#52525b"
-                strokeDasharray="3 6"
-                strokeWidth={1}
-                label={{ value: `K ${(option.strike * 100).toFixed(0)}%`, fill: '#71717a', fontSize: 9, position: 'insideTopLeft' }}
-              />
-
-              {/* Breakeven dot */}
-              <ReferenceDot
-                x={breakevenProb}
-                y={0}
-                r={5}
-                fill="#f59e0b"
-                stroke="#1c1917"
-                strokeWidth={2}
-              />
-
-              {/* Profit zone */}
-              <Area
-                type="monotone"
-                dataKey="gain"
-                stroke="#10b981"
-                strokeWidth={2.5}
-                fill="url(#payoffGainGrad)"
-                dot={false}
-                connectNulls
-              />
-              {/* Loss zone */}
-              <Area
-                type="monotone"
-                dataKey="loss"
-                stroke="#ef4444"
-                strokeWidth={2.5}
-                fill="url(#payoffLossGrad)"
-                dot={false}
-                connectNulls
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+        {/* Current prob indicator */}
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+          <div className="w-2 h-0.5 bg-blue-400" />
+          <span>
+            Market now at <span className={cn('font-mono font-semibold', inProfit ? 'text-emerald-400' : 'text-red-400')}>
+              {(currentProb * 100).toFixed(1)}%
+            </span>
+            {' '}— currently in <span className={inProfit ? 'text-emerald-400' : 'text-red-400'}>
+              {inProfit ? 'profit zone' : 'loss zone'}
+            </span>
+          </span>
         </div>
       </div>
     </div>

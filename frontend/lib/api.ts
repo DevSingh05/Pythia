@@ -328,6 +328,16 @@ export interface OptionsChainResponse {
   updatedAt: string
 }
 
+export interface VolatilityResponse {
+  sigma: number
+  source?: string
+}
+
+/** Implied / estimated σ for a market (MDS or historical fallback). */
+export async function fetchVolatility(marketId: string): Promise<VolatilityResponse> {
+  return apiFetch<VolatilityResponse>(`${MARKETS_BASE}/markets/${marketId}/vol`)
+}
+
 /** Fetch options chain from Pythia pricing engine. */
 export async function fetchOptionsChain(
   marketId: string,
@@ -401,12 +411,12 @@ export interface AmericanPriceResult {
   theta: number
   vega: number
   gamma: number
-  source: 'american' | 'european_fallback'
+  /** Python service, or same American tree in Node when the service is down */
+  source: 'american' | 'american_local'
 }
 
 /**
- * Price a single contract via the /api/price route.
- * Returns American pricing when the Python service is up, European vanilla otherwise.
+ * Price a single contract via the /api/price route (American binomial only).
  */
 export async function fetchAmericanPrice(params: {
   p0: number

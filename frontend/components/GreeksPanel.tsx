@@ -24,14 +24,19 @@ interface GreekDef {
 export default function GreeksPanel({ option, currentProb, className }: GreeksPanelProps) {
   const [openTip, setOpenTip] = useState<string | null>(null)
 
+  /** Stored δ is ∂V/∂p (p on [0,1]); show $ move for +1 percentage point */
+  const deltaPerPp = option.delta * 0.01
+  /** Stored ν is ∂V/∂σ; show $ move for σ +0.01 (e.g. 30% → 31% as decimal) */
+  const vegaPerVolPt = option.vega * 0.01
+
   const greeks: GreekDef[] = [
     {
       symbol: 'Δ',
       name: 'Delta',
-      value: option.delta,
-      unit: 'per 1pp',
-      tip: 'Change in option value per 1 percentage-point move in YES probability. Ranges 0→0.5 for calls near ATM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.5),
+      value: deltaPerPp,
+      unit: '$ / 1pp',
+      tip: 'Approximate mark change for a +1 percentage-point move in YES (∂V/∂p × 0.01). Chain table still shows raw ∂V/∂p.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.005),
       positive: option.type === 'call' ? true : undefined,
     },
     {
@@ -39,7 +44,7 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Gamma',
       value: option.gamma,
       unit: 'ΔΔ/pp',
-      tip: 'Change in delta per 1 percentage-point move in probability. Peaks at-the-money and tapers to near zero for deep ITM/OTM options.',
+      tip: 'Change in ∂V/∂p per +1 percentage-point move in YES (scaled second derivative). Peaks ATM.',
       normalise: v => Math.min(1, Math.abs(v) / 0.35),
       positive: true,
     },
@@ -48,17 +53,17 @@ export default function GreeksPanel({ option, currentProb, className }: GreeksPa
       name: 'Theta',
       value: option.theta,
       unit: 'per day',
-      tip: 'Time decay per calendar day. Always negative for long options — you lose premium as expiry approaches.',
+      tip: 'American mark change per calendar day (∂V/∂t), bump-and-reprice on the binomial tree.',
       normalise: v => Math.min(1, Math.abs(v) / 0.01),
       positive: false,
     },
     {
       symbol: 'ν',
       name: 'Vega',
-      value: option.vega,
-      unit: 'per 1% σ',
-      tip: 'Sensitivity to a 1% change in implied volatility. Peaks ATM, minimal deep ITM/OTM.',
-      normalise: v => Math.min(1, Math.abs(v) / 0.1),
+      value: vegaPerVolPt,
+      unit: '$ / vol pt',
+      tip: 'Approximate mark change when σ moves by +0.01 in decimal (e.g. 0.30 → 0.31). Raw ∂V/∂σ is stored on the chain.',
+      normalise: v => Math.min(1, Math.abs(v) / 0.001),
     },
   ]
 

@@ -11,6 +11,20 @@ interface AuthModalProps {
 
 type Tab = 'login' | 'signup'
 
+function formatAuthError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  const lower = msg.toLowerCase()
+  if (
+    lower.includes('rate limit') ||
+    lower.includes('too many requests') ||
+    lower.includes('over_request_rate_limit') ||
+    msg.includes('429')
+  ) {
+    return 'Too many auth requests (Supabase rate limit). Wait 1–2 minutes, avoid refreshing repeatedly, then try again. If this persists, raise Auth rate limits in the Supabase dashboard.'
+  }
+  return msg
+}
+
 export default function AuthModal({ onClose }: AuthModalProps) {
   const [tab, setTab] = useState<Tab>('login')
   const [email, setEmail] = useState('')
@@ -40,7 +54,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
         setMessage({ type: 'ok', text: 'Account created! Check your email to confirm, then log in.' })
       }
     } catch (err: unknown) {
-      setMessage({ type: 'err', text: (err as Error).message })
+      setMessage({ type: 'err', text: formatAuthError(err) })
     } finally {
       setLoading(false)
     }

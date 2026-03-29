@@ -101,7 +101,7 @@ export function usePaperTrades(): UsePaperTradesReturn {
     setHydrated(false)
 
     async function loadFromBackend() {
-      const token = await getToken()
+      const token = getToken()
       if (!token || cancelled) { setHydrated(true); return }
 
       const rows = await fetchOrders(token)
@@ -138,10 +138,9 @@ export function usePaperTrades(): UsePaperTradesReturn {
     // Optimistic update — immediately visible in the UI
     setOrders(prev => [...prev, order])
 
-    // Push to Supabase (fire-and-forget; failure is non-blocking)
-    getToken().then(token => {
-      if (!token) return
-      fetch('/api/orders', {
+    const token = getToken()
+    if (token) {
+      void fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,10 +154,10 @@ export function usePaperTrades(): UsePaperTradesReturn {
           side:       order.side,
           quantity:   order.quantity,
           limitPrice: order.premium,
-          metadata:   order,   // full PaperOrder for lossless cross-device reconstruction
+          metadata:   order,
         }),
       }).catch(() => { /* best-effort */ })
-    })
+    }
 
     return { success: true }
   }, [orders, getToken])
@@ -168,9 +167,10 @@ export function usePaperTrades(): UsePaperTradesReturn {
     setOrders([])
     setMarketPrices(new Map())
 
-    getToken().then(token => {
-      if (token) deleteAllOrders(token).catch(() => {})
-    })
+    {
+      const token = getToken()
+      if (token) void deleteAllOrders(token).catch(() => {})
+    }
   }, [getToken])
 
   const refreshPrices = useCallback((prices: Map<string, MarketSnapshot>) => {

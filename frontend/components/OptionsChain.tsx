@@ -7,6 +7,8 @@ import OptionRow, { OptionChainHeader } from './OptionRow'
 
 interface OptionsChainProps {
   chain: OptionsChainResponse
+  /** Controlled expiry (must match parent + `fetchOptionsChain` ?expiry=). */
+  selectedExpiry: string
   onSelectOption: (opt: OptionQuote) => void
   onExpiryChange?: (expiry: string) => void
   selectedOption: OptionQuote | null
@@ -14,20 +16,18 @@ interface OptionsChainProps {
   className?: string
 }
 
-type Side = 'buy' | 'sell'
 type ContractType = 'call' | 'put'
 
 export default function OptionsChain({
   chain,
+  selectedExpiry,
   onSelectOption,
   onExpiryChange,
   selectedOption,
   showGreeks = true,
   className,
 }: OptionsChainProps) {
-  const [side, setSide] = useState<Side>('buy')
   const [type, setType] = useState<ContractType>('call')
-  const [expiry, setExpiry] = useState(chain.expiries?.[1] ?? chain.expiries?.[0] ?? '1W')
   const [dataAgeMs, setDataAgeMs] = useState(0)
 
   // Track how stale the price data is — refreshes every second
@@ -44,7 +44,6 @@ export default function OptionsChain({
   const isVeryStale = dataAgeS > 30
 
   function handleExpiryChange(e: string) {
-    setExpiry(e)
     onExpiryChange?.(e)
   }
 
@@ -80,26 +79,7 @@ export default function OptionsChain({
     <div className={cn('rounded-xl bg-zinc-900/40 border border-zinc-800 overflow-hidden', className)}>
       {/* Controls bar */}
       <div className="px-4 py-3 flex items-center gap-3 border-b border-zinc-800 flex-wrap bg-zinc-900/60">
-        {/* Buy / Sell toggle */}
-        <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-xs">
-          {(['buy', 'sell'] as Side[]).map(s => (
-            <button
-              key={s}
-              onClick={() => setSide(s)}
-              className={cn(
-                'px-4 py-1.5 font-semibold capitalize transition-all duration-150',
-                side === s
-                  ? s === 'buy'
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-                    : 'bg-red-600 text-white shadow-lg shadow-red-600/20'
-                  : 'text-zinc-500 hover:text-zinc-200'
-              )}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-
+        {/* Buy/sell lives on TradePanel — chain is call/put + strike selection only */}
         {/* Call / Put toggle */}
         <div className="flex rounded-lg overflow-hidden border border-zinc-700 text-xs">
           {(['call', 'put'] as ContractType[]).map(t => (
@@ -126,7 +106,7 @@ export default function OptionsChain({
               onClick={() => handleExpiryChange(e)}
               className={cn(
                 'px-2.5 py-1 text-xs rounded-md font-mono font-medium transition-all duration-150',
-                expiry === e
+                selectedExpiry === e
                   ? 'bg-zinc-700 border border-zinc-600 text-zinc-100'
                   : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60'
               )}
@@ -222,7 +202,7 @@ export default function OptionsChain({
       {/* Footer: contract count */}
       <div className="px-4 py-2 border-t border-zinc-800/60 bg-zinc-900/40 text-center">
         <span className="text-[10px] text-zinc-600">
-          {options.length} contracts · {type === 'call' ? 'Call' : 'Put'}s · {expiry} expiry
+          {options.length} contracts · {type === 'call' ? 'Call' : 'Put'}s · {selectedExpiry} expiry
         </span>
       </div>
     </div>
@@ -233,7 +213,6 @@ export function OptionsChainSkeleton() {
   return (
     <div className="rounded-xl bg-zinc-900/40 border border-zinc-800 overflow-hidden animate-pulse">
       <div className="px-4 py-3 flex gap-3 border-b border-zinc-800">
-        <div className="h-7 w-24 bg-zinc-800 rounded-lg" />
         <div className="h-7 w-24 bg-zinc-800 rounded-lg" />
         <div className="ml-auto flex gap-1">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-6 w-10 bg-zinc-800 rounded-md" />)}

@@ -68,8 +68,8 @@ def main():
         logits  = [float(np.log(p/(1-p))) for p in clamped]
         diffs   = [logits[i+1]-logits[i] for i in range(len(logits)-1)]
         lo, hi  = np.percentile(diffs, [1, 99])
-        diffs   = [d for d in diffs if lo <= d <= hi]
-        sigma   = clamp_sigma(float(np.std(diffs, ddof=1)) * np.sqrt(252))
+        diffs   = [float(np.clip(d, lo, hi)) for d in diffs]
+        sigma   = clamp_sigma(float(np.std(diffs, ddof=1)) * np.sqrt(365))
 
     print(f"Sigma = {sigma:.4f}")
 
@@ -79,14 +79,14 @@ def main():
 
     # Entry premium
     entry_prob = series_probs[0]
-    entry_tau  = args.expiry_days / 252.0
+    entry_tau  = args.expiry_days / 365.0
     premium    = american_option_binomial(entry_prob, args.strike, sigma, entry_tau, 100, args.kind)
     print(f"Entry: p={entry_prob:.3f}, premium=${premium:.4f}")
 
     # Pre-compute each tick
     sim_rows = []
     for i, (prob, ts) in enumerate(zip(series_probs, series_dates)):
-        tau_remaining = max((args.expiry_days - i) / 252.0, 0)
+        tau_remaining = max((args.expiry_days - i) / 365.0, 0)
         opt_val = american_option_binomial(prob, args.strike, sigma, tau_remaining, 100, args.kind)
         pnl     = opt_val - premium
         pnl_pct = pnl / premium if premium > 0 else 0

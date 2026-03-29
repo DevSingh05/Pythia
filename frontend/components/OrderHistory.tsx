@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { PaperOrder, MarketSnapshot } from '@/lib/paperTrade'
-import { vanillaCall, vanillaPut } from '@/lib/pricing'
+import { americanOptionBinomial, AMERICAN_TREE_STEPS } from '@/lib/pricing'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { ExternalLink } from 'lucide-react'
 import InfoTooltip from '@/components/InfoTooltip'
@@ -38,9 +38,14 @@ function computeOrderPnl(
   const remainingDays = Math.max(0.1, order.daysToExpiry - daysSinceFill)
   const tau = remainingDays / 365
 
-  const currentPremium = order.type === 'call'
-    ? vanillaCall(snap.currentProb, order.strike, snap.impliedVol, tau)
-    : vanillaPut(snap.currentProb, order.strike, snap.impliedVol, tau)
+  const currentPremium = americanOptionBinomial(
+    snap.currentProb,
+    order.strike,
+    snap.impliedVol,
+    tau,
+    AMERICAN_TREE_STEPS,
+    order.type,
+  )
 
   const diff = currentPremium - order.premium
   // Buy orders profit when premium increases, sell orders profit when premium decreases

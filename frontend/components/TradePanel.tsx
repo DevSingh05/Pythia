@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { cn, fmtProb, fmtPremium } from '@/lib/utils'
 import { OptionQuote, AppMarket, placeOrder } from '@/lib/api'
-import PayoffChart from './PayoffChart'
+import PayoffChart, { computePayoffMetrics, fmtCents } from './PayoffChart'
 import { Minus, Plus, AlertCircle, LogIn, FlaskConical, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import AuthModal from './AuthModal'
@@ -45,12 +45,19 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
 
   const isCall = option.type === 'call'
   const totalCost = option.premium * quantity
+  /** Backend may round to 0; chain can show 0.00¢ while model still has tiny value — block truly zero quotes. */
+  const noExecutablePremium =
+    !Number.isFinite(option.premium) || option.premium <= 0
 
   const handleSubmit = async () => {
+    if (noExecutablePremium) {
+      setOrderError('No quoted premium for this strike — not executable (deep OTM or stale quote).')
+      return
+    }
     setLoading(true)
     setOrderError(null)
     try {
-      const token = await getToken()
+      const token = getToken()
       await placeOrder(
         {
           marketId: market.id,
@@ -151,7 +158,30 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Payoff chart — centerpiece */}
+        {/* 3-metric bar — max loss / breakeven / max profit */}
+        {(() => {
+          const { maxPnl, minPnl, breakevenProb, beAnalytic } = computePayoffMetrics(option, side, quantity)
+          return (
+            <div className="grid grid-cols-3 gap-1.5">
+              <div className="rounded-lg bg-red-500/[0.07] border border-red-500/20 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Loss</div>
+                <div className="text-sm font-mono font-bold text-red-400">{fmtCents(minPnl)}</div>
+              </div>
+              <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/40 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Breakeven</div>
+                <div className="text-sm font-mono font-bold text-amber-400">
+                  {beAnalytic != null ? `${(breakevenProb * 100).toFixed(1)}%` : '—'}
+                </div>
+              </div>
+              <div className="rounded-lg bg-emerald-500/[0.07] border border-emerald-500/20 p-2.5 text-center">
+                <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 font-medium">Max Profit</div>
+                <div className="text-sm font-mono font-bold text-emerald-400">{fmtCents(maxPnl)}</div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Payoff chart */}
         <PayoffChart
           option={option}
           side={side}
@@ -159,16 +189,10 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           currentProb={market.currentProb}
         />
 
-        {/* Premium + breakeven */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Premium / contract</div>
-            <div className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</div>
-          </div>
-          <div className="bg-zinc-800/50 rounded-lg p-3">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Breakeven YES%</div>
-            <div className="text-sm font-mono font-semibold text-blue-400">{fmtProb(option.breakeven, 1)}</div>
-          </div>
+        {/* Premium per contract */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Premium / contract</span>
+          <span className="text-sm font-mono font-semibold text-zinc-100">{fmtPremium(option.premium)}</span>
         </div>
 
         {/* Quantity + total */}
@@ -210,17 +234,26 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
           </div>
         )}
 
+        {noExecutablePremium && (
+          <div className="flex gap-2 text-xs text-amber-400/90 bg-amber-500/8 border border-amber-500/25 rounded-lg p-2.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              Premium is zero or missing — you cannot buy this for free; pick a strike with a positive quote or refresh.
+            </span>
+          </div>
+        )}
+
         {/* Submit — gated on auth */}
         {user ? (
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || noExecutablePremium}
             className={cn(
               'w-full py-2.5 rounded-lg text-sm font-semibold tracking-wide transition-colors',
               side === 'buy'
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 : 'bg-red-600 hover:bg-red-500 text-white',
-              loading && 'opacity-50 cursor-not-allowed'
+              (loading || noExecutablePremium) && 'opacity-50 cursor-not-allowed'
             )}
           >
             {loading ? 'Processing…' : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantity > 1 ? `${quantity}×` : ''} ${option.type.toUpperCase()}`}
@@ -236,7 +269,7 @@ export default function TradePanel({ market, option, side, onSideChange, classNa
         )}
 
         <p className="text-[10px] text-zinc-600 text-center">
-          European · Cash settled · Logit-Normal pricing
+          American exercise · Cash settled · Logit-normal tree
         </p>
       </div>
     </div>

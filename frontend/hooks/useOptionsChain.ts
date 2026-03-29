@@ -15,7 +15,7 @@ export function useOptionsChain(
   currentProb: number,
   impliedVol: number,
   _clobTokenId?: string,
-  expiry: string = '1W'
+  expiry: string = '7D'
 ) {
   const [state, setState] = useState<UseOptionsChainState>({
     data: null,
@@ -30,7 +30,9 @@ export function useOptionsChain(
     let cancelled = false
 
     async function load() {
-      const expiryOpt = EXPIRY_OPTIONS.find(e => e.label === expiry) ?? EXPIRY_OPTIONS[1]
+      const legacy: Record<string, string> = { '1W': '7D', '2W': '14D', '1M': '30D' }
+      const label = legacy[expiry] ?? expiry
+      const expiryOpt = EXPIRY_OPTIONS.find(e => e.label === label) ?? EXPIRY_OPTIONS[1]
 
       /** Build chain client-side using the supplied sigma */
       function buildLocal(sigma: number): OptionsChainResponse {
